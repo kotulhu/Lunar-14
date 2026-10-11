@@ -66,6 +66,122 @@ static std::string dataPath(const std::string& dir, const std::string& name) {
     return dir.back() == '/' ? dir + name : dir + "/" + name;
 }
 
+// Реалистичная загрузка конкретной системы: Red Hat Linux 5.2, ядро 2.0.36.
+// Проходят все этапы: BIOS POST, загрузчик LILO, инициализация ядра,
+// init и системные службы, затем классическое приглашение login.
+static void printBootSequence(Terminal& term, const Session& session) {
+    // BIOS POST
+    term.print("Award Modular BIOS v4.51PG, An Energy Star Ally");
+    term.print("Copyright (C) 1984-98, Award Software, Inc.");
+    term.print("");
+    term.print("i430TX PCIset");
+    term.print("Main Processor   : Pentium(r) MMX 233MHz");
+    term.print("Memory Test      : 32768K OK");
+    term.print("Cache Memory     : 512K");
+    term.print("");
+    term.print("Award Plug and Play BIOS Extension v1.0A");
+    term.print("Copyright (C) 1997, Award Software, Inc.");
+    term.print("");
+    term.print("Detecting HDD Primary Master   ... WDC AC2340");
+    term.print("Detecting HDD Primary Slave    ... None");
+    term.print("Detecting HDD Secondary Master ... MITSUMI CD-ROM FX400");
+    term.print("Detecting HDD Secondary Slave  ... None");
+    term.print("");
+    term.print("Press DEL to enter SETUP");
+    term.print("");
+    term.pause(300);
+
+    // Загрузчик
+    term.print("LILO 21.0 boot");
+    term.print("Loading linux ......................");
+    term.pause(300);
+
+    // Ядро 2.0.36
+    term.print("Linux version 2.0.36 (root@porky.devel.redhat.com) (gcc version 2.7.2.3) #1 Wed Dec 16 12:00:00 EST 1998");
+    term.print("Detected 233.860004 MHz processor.");
+    term.print("Console: colour VGA+ 80x25");
+    term.print("POSIX conformance testing by UNIFIX");
+    term.print("Calibrating delay loop... 232.65 BogoMIPS");
+    term.print("Memory: 31088k/32768k available (860k kernel code, 384k reserved, 1180k data)");
+    term.print("Checking 386/387 Coupling OK");
+    term.print("Checking HLT instruction... OK");
+    term.print("PCI: PCI BIOS revision 2.10 entry at 0xfdb90, last bus=0");
+    term.print("PCI: Probing PCI hardware");
+    term.print("Linux NET4.0 for Linux 2.0");
+    term.print("Serial driver version 4.26 with no serial options enabled");
+    term.print("tty00 at 0x03f8 (irq = 4) is a 16550A");
+    term.print("tty01 at 0x02f8 (irq = 3) is a 16550A");
+    term.print("Floppy drive(s): fd0 is 1.44M");
+    term.print("hda: WDC AC2340, 320MB w/64kB Cache, CHS=1046/12/63");
+    term.print("hdb: MITSUMI CD-ROM FX400, ATAPI CDROM drive");
+    term.print("Partition check:");
+    term.print(" hda: hda1 hda2 < hda5 >");
+    term.print("VFS: Mounted root (ext2 filesystem) readonly.");
+    term.print("Freeing unused kernel memory: 64k freed");
+    term.pause(300);
+
+    // init и системные службы
+    term.print("INIT: version 2.74 booting");
+    term.print("Setting clock  (localtime): Thu Dec 31 23:59:59 EST 1998  [  OK  ]");
+    term.print("Mounting proc filesystem:  [  OK  ]");
+    term.print("Configuring kernel parameters:  [  OK  ]");
+    term.print("Activating swap partitions:  [  OK  ]");
+    term.print("Setting hostname localhost.localdomain:  [  OK  ]");
+    term.print("Checking root filesystem");
+    term.print("/: clean, 1046/8192 files, 9450/16384 blocks");
+    term.print("Remounting root filesystem in read-write mode:  [  OK  ]");
+    term.print("Finding module dependencies:  [  OK  ]");
+    term.print("Checking filesystems");
+    term.print("Checking all file systems  [  OK  ]");
+    term.print("Mounting local filesystems:  [  OK  ]");
+    term.print("Enabling swap space:  [  OK  ]");
+    term.print("INIT: Entering runlevel: 3");
+    term.print("Starting system logger:  [  OK  ]");
+    term.print("Starting kernel logger:  [  OK  ]");
+    term.print("Starting portmapper:  [  OK  ]");
+    term.print("Starting keytable:  [  OK  ]");
+    term.print("Initializing random number generator:  [  OK  ]");
+    term.print("Bringing up interface lo:  [  OK  ]");
+    term.print("Bringing up interface eth0:  [  OK  ]");
+    term.print("Starting crond:  [  OK  ]");
+    term.print("Starting lpd:  [  OK  ]");
+    term.print("Starting inetd:  [  OK  ]");
+    term.print("Starting sendmail:  [  OK  ]");
+    term.print("Starting httpd:  [  OK  ]");
+    term.print("Starting console mouse services:  [  OK  ]");
+    term.pause(300);
+
+    term.print("");
+    term.print("Red Hat Linux release 5.2 (Apollo)");
+    term.print("Kernel 2.0.36 on an i586");
+    term.print("");
+    term.print(session.hostName() + " login: " + session.user());
+}
+
+// Короткая заставка после успешного входа: приветствие и список утилит.
+static void printBootBanner(Terminal& term, const Registry& registry,
+                            const Session& session) {
+    term.print("");
+    term.print("Welcome to " + session.hostName() + " (tty1)");
+    term.print("");
+    term.print("Available commands:");
+
+    // Только то, что разрешено на текущем хосте (как в help), именами в строку.
+    std::string line;
+    for (Command* c : registry.all()) {
+        if (!session.host().allows(c->name())) continue;
+        std::string token = " " + c->name();
+        if (line.size() + token.size() > 78) {
+            term.print(line);
+            line.clear();
+        }
+        line += token;
+    }
+    if (!line.empty()) term.print(line);
+    term.print("");
+    term.print("Type 'help' for a list of commands.");
+}
+
 int main(int argc, char** argv) {
     // Необязательные аргументы: --start-host <ip|имя>, --unlock-contacts
     // и --data-dir <путь>.
@@ -150,7 +266,8 @@ int main(int argc, char** argv) {
     registry.add(std::make_unique<ChatCommand>());
     registry.add(std::make_unique<ExitCommand>());
 
-    term.print("Hacker v0.1 -- type 'help' for a list of commands.");
+    printBootSequence(term, *session);
+    printBootBanner(term, registry, *session);
 
     // Одна строка, если выбранный провайдер ещё не реализован.
     if (!provider_warning.empty()) {
