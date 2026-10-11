@@ -1,0 +1,9 @@
+{
+  "ip": "203.0.113.99",
+  "name": "dead-host",
+  "alive": false,
+  "ports": {},
+  "accounts": [],
+  "start_dir": "/",
+  "fs": {}
+}

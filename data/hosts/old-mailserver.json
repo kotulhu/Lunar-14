@@ -1,0 +1,22 @@
+{
+  "ip": "203.0.113.5",
+  "name": "old-mailserver",
+  "alive": true,
+  "ports": {
+    "23": { "service": "telnet", "banner": "Linux telnetd" },
+    "25": { "service": "smtp", "banner": "Sendmail 8.9.3" }
+  },
+  "accounts": [["guest", "guest"]],
+  "start_dir": "/home/guest",
+  "commands": ["ls", "cat"],
+  "fs": {
+    "etc": {
+      "motd": "Welcome to old-mailserver. Почта не работает с 1999 года."
+    },
+    "home": {
+      "guest": {
+        "mail.txt": { "$file": "home/guest/mail.txt" }
+      }
+    }
+  }
+}

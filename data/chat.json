@@ -1,0 +1,31 @@
+{
+  "contacts": [
+    {
+      "id": "ghost",
+      "name": "Аноним",
+      "status": "online",
+      "visible": true,
+      "history": [
+        { "from": "ghost", "text": "Ты получил моё письмо?", "time": "03:12" },
+        { "from": "ghost", "text": "Не доверяй никому в NASA.", "time": "03:13" },
+        { "from": "ghost", "text": "Найди архив JSC. Там ответы.", "time": "03:15" }
+      ]
+    },
+    {
+      "id": "wolf",
+      "name": "Вольф Скульдер",
+      "status": "away",
+      "visible": false,
+      "history": [
+        { "from": "wolf", "text": "Эй, новичок! Ты ведь тоже видел огни над полигоном?", "time": "22:40" }
+      ]
+    },
+    {
+      "id": "diona",
+      "name": "Диона Секуркулли",
+      "status": "offline",
+      "visible": false,
+      "history": []
+    }
+  ]
+}

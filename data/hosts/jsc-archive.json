@@ -1,0 +1,37 @@
+{
+  "ip": "198.51.100.17",
+  "name": "jsc-archive",
+  "alive": true,
+  "ports": {
+    "80": { "service": "http", "banner": "Apache/1.3.9" },
+    "2222": { "service": "ssh", "banner": "OpenSSH_3.9" }
+  },
+  "accounts": [["admin", "houston1969"]],
+  "start_dir": "/",
+  "fs": {
+    "etc": {
+      "motd": "JSC Archive. Unauthorized access is prohibited."
+    },
+    "readme.txt": "Только для персонала.",
+    "home": {
+      "admin": {
+        ".bash_history": [
+          "ls -la",
+          "sudo make me a sandwich",
+          "cd /var/log && tail -f coffee.log",
+          "sudo apt-get install coffee",
+          "find / -name 'sandwich' 2>/dev/null",
+          "echo 'где кофе' >> /dev/null",
+          "ssh admin@localhost          # пароль подошёл с третьего раза",
+          "brew install motivation"
+        ]
+      }
+    },
+    "docs": {
+      "mission_7.txt": { "$file": "docs/mission_7.txt" },
+      "archive": {
+        "notes.txt": "Файл из архива: терминал старого почтового сервера всё ещё отвечает."
+      }
+    }
+  }
+}

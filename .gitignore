@@ -30,3 +30,11 @@
 *.exe
 *.out
 *.app
+
+# Build output
+build/
+hacker-bin
+
+# macOS
+.DS_Store
+
