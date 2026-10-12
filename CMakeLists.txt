@@ -29,6 +29,7 @@ add_executable(hacker
     Hacker/src/core/VirtualFs.cpp
     Hacker/src/core/Mailbox.cpp
     Hacker/src/core/ChatStore.cpp
+    Hacker/src/core/SaveGame.cpp
     Hacker/src/core/TextUtil.cpp
     Hacker/src/core/CannedProvider.cpp
     Hacker/src/core/ProviderFactory.cpp
@@ -49,6 +50,8 @@ add_executable(hacker
     Hacker/src/commands/ChatCommand.cpp
     Hacker/src/commands/ExitCommand.cpp
     Hacker/src/ui/Terminal.cpp
+    Hacker/src/ui/SaveDir.cpp
+    Hacker/src/ui/Signals.cpp
     Hacker/src/ui/FileManagerScreen.cpp
     Hacker/src/ui/MailScreen.cpp
     Hacker/src/ui/ChatScreen.cpp

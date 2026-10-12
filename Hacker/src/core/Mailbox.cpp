@@ -133,6 +133,11 @@ void Mailbox::add(Message message) {
     messages_.push_back(std::move(message));
 }
 
+void Mailbox::clear() {
+    messages_.clear();
+    next_id_ = 1;
+}
+
 bool Mailbox::markRead(std::size_t index) {
     if (index >= messages_.size()) return false;
     messages_[index].read = true;

@@ -59,6 +59,27 @@ FsNode* resolveMutable(Host& host, const std::string& path) {
     return current;
 }
 
+// Слой пользовательских правок: имя хоста -> (путь -> содержимое).
+std::map<std::string, std::map<std::string, std::string>>& changeLayer() {
+    static std::map<std::string, std::map<std::string, std::string>> layer;
+    return layer;
+}
+
+// Содержимое правки по пути или nullptr, если правки нет.
+const std::string* overlayLookup(const Host& host, const std::string& path) {
+    auto host_it = changeLayer().find(host.name);
+    if (host_it == changeLayer().end()) return nullptr;
+    auto it = host_it->second.find(path);
+    return it == host_it->second.end() ? nullptr : &it->second;
+}
+
+// Родительский каталог абсолютного пути ("/" для верхнего уровня).
+std::string parentDir(const std::string& path) {
+    std::size_t slash = path.find_last_of('/');
+    if (slash == std::string::npos || slash == 0) return "/";
+    return path.substr(0, slash);
+}
+
 }  // namespace
 
 std::string VirtualFs::normalize(const std::string& current_dir, const std::string& path) {
@@ -100,6 +121,19 @@ std::vector<std::string> VirtualFs::list(const Host& host, const std::string& di
         if (!show_hidden && !kv.first.empty() && kv.first[0] == '.') continue;
         entries.insert(kv.second.is_dir ? kv.first + "/" : kv.first);
     }
+
+    // Файлы, созданные игроком, лежат в слое правок и добавляются сюда же.
+    auto host_it = changeLayer().find(host.name);
+    if (host_it != changeLayer().end()) {
+        for (const auto& kv : host_it->second) {
+            if (parentDir(kv.first) != dir) continue;
+            std::string name = kv.first.substr(kv.first.find_last_of('/') + 1);
+            if (name.empty()) continue;
+            if (!show_hidden && name[0] == '.') continue;
+            entries.insert(name);
+        }
+    }
+
     return std::vector<std::string>(entries.begin(), entries.end());
 }
 
@@ -109,10 +143,15 @@ bool VirtualFs::isDirectory(const Host& host, const std::string& path) {
 }
 
 bool VirtualFs::exists(const Host& host, const std::string& path) {
+    if (overlayLookup(host, path)) return true;
     return resolve(host, path) != nullptr;
 }
 
 std::string VirtualFs::readFile(const Host& host, const std::string& path, bool& ok) {
+    if (const std::string* edited = overlayLookup(host, path)) {
+        ok = true;
+        return *edited;  // перезаписанный игроком файл
+    }
     const FsNode* node = resolve(host, path);
     if (!node || node->is_dir) {
         ok = false;
@@ -123,7 +162,7 @@ std::string VirtualFs::readFile(const Host& host, const std::string& path, bool&
     return node->content;
 }
 
-bool VirtualFs::writeFile(Host& host, const std::string& path, const std::string& content) {
+bool VirtualFs::writeFile(const Host& host, const std::string& path, const std::string& content) {
     if (path.empty() || path == "/" || path[0] != '/') return false;
 
     std::size_t slash = path.find_last_of('/');
@@ -131,17 +170,14 @@ bool VirtualFs::writeFile(Host& host, const std::string& path, const std::string
     std::string name = path.substr(slash + 1);
     if (name.empty()) return false;
 
-    FsNode* parent = resolveMutable(host, dir);
+    const FsNode* parent = resolve(host, dir);
     if (!parent || !parent->is_dir) return false;
 
     // Нельзя перезаписывать каталог и системные (сгенерированные) файлы.
     auto it = parent->children.find(name);
     if (it != parent->children.end() && (it->second.is_dir || it->second.generate)) return false;
 
-    FsNode node;
-    node.is_dir = false;
-    node.content = content;
-    parent->children[name] = std::move(node);
+    changeLayer()[host.name][path] = content;
     return true;
 }
 
@@ -170,7 +206,16 @@ bool VirtualFs::isSystemFile(const Host& host, const std::string& path) {
 }
 
 std::size_t VirtualFs::fileSize(const Host& host, const std::string& path) {
+    if (const std::string* edited = overlayLookup(host, path)) return edited->size();
     const FsNode* node = resolve(host, path);
     if (!node || node->is_dir) return 0;
     return node->content.size();
+}
+
+const std::map<std::string, std::map<std::string, std::string>>& VirtualFs::changes() {
+    return changeLayer();
+}
+
+void VirtualFs::clearChanges() {
+    changeLayer().clear();
 }

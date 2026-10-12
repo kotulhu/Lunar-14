@@ -28,6 +28,9 @@ public:
     const std::vector<Message>& messages() const { return messages_; }
     std::vector<Message>& messages() { return messages_; }
 
+    // Очищает ящик (перед загрузкой сохранения).
+    void clear();
+
     // Помечает письмо прочитанным по индексу. false, если индекс вне диапазона.
     bool markRead(std::size_t index);
 

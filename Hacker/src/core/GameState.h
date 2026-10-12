@@ -25,6 +25,9 @@ public:
     // Все записи в порядке добавления.
     const std::vector<VisitedEntry>& entries() const { return entries_; }
 
+    // Очищает список (перед загрузкой сохранения).
+    void clear() { entries_.clear(); }
+
     // Текст сгенерированного файла-списка известных узлов.
     std::string renderVisited() const;
 

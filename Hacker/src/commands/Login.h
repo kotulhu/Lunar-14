@@ -7,6 +7,7 @@
 #include "core/Session.h"
 #include "core/VirtualFs.h"
 #include "core/World.h"
+#include "ui/Signals.h"
 #include "ui/Terminal.h"
 
 // Разбирает номер порта. true при корректности (1..65535).
@@ -49,6 +50,7 @@ inline bool authenticate(Session& session, const Host& host, int port,
 
     for (int attempt = 0; attempt < 3; ++attempt) {
         std::string entered = term.readPassword(password_prompt);
+        if (Signals::interrupted()) return false;  // Ctrl+C — прерываем вход
         if (password && entered == *password) {
             session.gameState().record(host.name, port, user, entered);
             return true;

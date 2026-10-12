@@ -190,3 +190,19 @@ void ChatStore::unlock(const std::string& id) {
 void ChatStore::unlockAll() {
     for (Entry& entry : entries_) entry.contact.visible = true;
 }
+
+std::vector<Contact> ChatStore::contacts() const {
+    std::vector<Contact> result;
+    result.reserve(entries_.size());
+    for (const Entry& entry : entries_) result.push_back(entry.contact);
+    return result;
+}
+
+void ChatStore::restore(const std::string& id, bool visible,
+                        std::vector<ChatMessage> history, int unread) {
+    Entry* entry = findEntry(id);
+    if (!entry) return;
+    entry->contact.visible = visible;
+    entry->history = std::move(history);
+    entry->unread = unread;
+}

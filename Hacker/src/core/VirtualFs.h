@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -24,9 +25,17 @@ public:
     // Читает файл. ok=false, если путь не является файлом.
     static std::string readFile(const Host& host, const std::string& path, bool& ok);
 
-    // Создаёт или перезаписывает файл. false, если родительский каталог не найден
-    // или путь указывает на каталог. Изменения живут только в памяти.
-    static bool writeFile(Host& host, const std::string& path, const std::string& content);
+    // Создаёт или перезаписывает файл. false, если родительский каталог не найден,
+    // путь занят каталогом или системным файлом. Изменение ложится в слой
+    // пользовательских правок (см. changes), а не в базовое дерево.
+    static bool writeFile(const Host& host, const std::string& path, const std::string& content);
+
+    // Слой пользовательских изменений: имя хоста -> (путь -> содержимое).
+    // Только созданные или перезаписанные игроком файлы; базовое дерево не трогается.
+    static const std::map<std::string, std::map<std::string, std::string>>& changes();
+
+    // Сбрасывает слой пользовательских изменений (новая игра).
+    static void clearChanges();
 
     // Добавляет сгенерированный (системный) файл: текст возвращает функция.
     static bool addGeneratedFile(Host& host, const std::string& path,

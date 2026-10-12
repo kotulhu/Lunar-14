@@ -1,6 +1,8 @@
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -23,7 +25,11 @@
 #include "commands/TelnetCommand.h"
 #include "core/Session.h"
 #include "core/ProviderFactory.h"
+#include "core/SaveGame.h"
+#include "core/Version.h"
 #include "core/World.h"
+#include "ui/SaveDir.h"
+#include "ui/Signals.h"
 #include "ui/Terminal.h"
 
 // Разбивает строку на слова по пробелам и табам.
@@ -183,21 +189,38 @@ static void printBootBanner(Terminal& term, const Registry& registry,
 }
 
 int main(int argc, char** argv) {
-    // Необязательные аргументы: --start-host <ip|имя>, --unlock-contacts
-    // и --data-dir <путь>.
+    // Необязательные аргументы: --start-host <ip|имя>, --unlock-contacts,
+    // --data-dir <путь>, --save-dir <путь>, --new, --no-save.
     std::string start_host;
     std::string data_dir;
+    std::string save_dir;
     bool unlock_contacts = false;
+    bool new_game = false;
+    bool no_save = false;
+    bool show_version = false;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--start-host" && i + 1 < argc) {
             start_host = argv[++i];
         } else if (arg == "--data-dir" && i + 1 < argc) {
             data_dir = argv[++i];
+        } else if (arg == "--save-dir" && i + 1 < argc) {
+            save_dir = argv[++i];
+        } else if (arg == "--new") {
+            new_game = true;
+        } else if (arg == "--no-save") {
+            no_save = true;
+        } else if (arg == "-v" || arg == "--version") {
+            show_version = true;
         } else if (arg == "--unlock-contacts") {
             unlock_contacts = true;
         }
     }
+    if (show_version) {
+        std::cout << kGameTitle << " " << kGameVersion << "\n";
+        return 0;
+    }
+    Signals::install();
     if (data_dir.empty()) data_dir = defaultDataDir(argv[0]);
 
     World world;
@@ -230,7 +253,6 @@ int main(int argc, char** argv) {
         std::cerr << "Failed to load chat: " << error << "\n";
         return 1;
     }
-    if (unlock_contacts) session->chat().unlockAll();
 
     // Провайдер ответов: имя берём из config.json, реализация — в одном месте.
     std::string provider_name = readChatProviderName(dataPath(data_dir, "config.json"), error);
@@ -247,6 +269,23 @@ int main(int argc, char** argv) {
         return 1;
     }
     session->setChatProvider(std::move(provider));
+
+    // Папка и файл сохранения. --no-save полностью отключает работу с ним.
+    bool saving_enabled = !no_save;
+    std::string save_path;
+    if (saving_enabled) {
+        if (save_dir.empty()) save_dir = defaultSaveDir();
+        std::error_code ec;
+        std::filesystem::create_directories(save_dir, ec);
+        if (ec) {
+            term.print("Warning: cannot create save directory: " + save_dir);
+            saving_enabled = false;
+        } else {
+            save_path = (std::filesystem::path(save_dir) / "save.json").string();
+        }
+    }
+    std::string last_saved;
+    bool save_disabled = false;
 
     // Регистрация утилит. Новая команда = один вызов add().
     Registry registry;
@@ -274,6 +313,50 @@ int main(int argc, char** argv) {
         term.print(provider_warning);
     }
 
+    // Загрузка сохранения: спросить о старой игре, обработать повреждение.
+    if (saving_enabled && std::filesystem::exists(save_path)) {
+        bool do_load = !new_game;
+        if (!new_game) {
+            std::string answer;
+            if (!term.readLine("Saved game found. Continue? [Y/n] ", answer)) {
+                term.print("");
+                // Ctrl+C прервал вопрос — не трогаем сохранение, просто выходим.
+                do_load = Signals::interrupted();
+            } else {
+                std::string low = answer;
+                for (char& c : low) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                do_load = !(low == "n" || low == "no");
+            }
+        }
+
+        if (do_load) {
+            std::ifstream in(save_path, std::ios::binary);
+            std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            std::string load_error;
+            std::string warning;
+            if (in && SaveGame::deserialize(text, *session, world, load_error, warning)) {
+                term.print("Game loaded.");
+                if (!warning.empty()) term.print(warning);
+                last_saved = SaveGame::serialize(*session);
+            } else {
+                if (!load_error.empty()) term.print("Cannot load saved game: " + load_error);
+                std::string backup_error;
+                if (!SaveGame::backup(save_path, backup_error)) {
+                    term.print("Warning: " + backup_error);
+                }
+                term.print("Starting a new game.");
+            }
+        } else {
+            // Новая игра: старое сохранение уходит в save.json.bak.
+            std::string backup_error;
+            if (!SaveGame::backup(save_path, backup_error)) {
+                term.print("Warning: " + backup_error);
+            }
+        }
+    }
+
+    if (unlock_contacts) session->chat().unlockAll();
+
     // Подсказка о почте показывается один раз при старте на домашнем хосте.
     const Host* player_host = world.findHost(world.playerHost());
     if (player_host && session->hostIp() == player_host->ip) {
@@ -289,12 +372,29 @@ int main(int argc, char** argv) {
         }
     }
 
+    // Сохраняет игру, если состояние изменилось. После первой ошибки записи
+    // сохранение молча отключается, чтобы не мешать игре.
+    auto saveIfNeeded = [&]() {
+        if (!saving_enabled || save_disabled) return;
+        std::string text = SaveGame::serialize(*session);
+        if (text == last_saved) return;
+        std::string save_error;
+        if (!SaveGame::writeAtomic(save_path, text, save_error)) {
+            term.print("Warning: cannot save game: " + save_error);
+            save_disabled = true;
+            return;
+        }
+        last_saved = std::move(text);
+    };
+
     std::string line;
     while (true) {
+        if (Signals::interrupted()) break;  // Ctrl+C/SIGTERM: выходим аккуратно
+
         std::string prompt = session->user() + "@" + session->hostName() + ":" +
                              session->currentDir() + "$ ";
         if (!term.readLine(prompt, line)) {
-            term.print("");  // переводим строку после Ctrl+D
+            term.print("");  // переводим строку после Ctrl+D или Ctrl+C
             break;
         }
 
@@ -312,9 +412,14 @@ int main(int argc, char** argv) {
         }
 
         command->execute(*session, world, args, term);
+        saveIfNeeded();
 
         if (session->quitRequested()) break;
     }
 
+    if (Signals::interrupted()) {
+        term.print("Interrupted. Saving and exiting.");  // Ctrl+C/SIGTERM
+    }
+    saveIfNeeded();  // на выходе, после Ctrl+C и Ctrl+D
     return 0;
 }

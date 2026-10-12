@@ -53,6 +53,14 @@ public:
     // Открыть все контакты (проверочный ключ --unlock-contacts).
     void unlockAll();
 
+    // Копии всех контактов в порядке загрузки (для сохранения).
+    std::vector<Contact> contacts() const;
+
+    // Восстанавливает контакт из сохранения: видимость, историю и счётчик
+    // непрочитанных. Ничего не делает, если контакта нет.
+    void restore(const std::string& id, bool visible,
+                 std::vector<ChatMessage> history, int unread);
+
 private:
     struct Entry {
         Contact contact;
