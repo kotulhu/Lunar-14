@@ -119,6 +119,7 @@ std::string VirtualFs::readFile(const Host& host, const std::string& path, bool&
         return {};
     }
     ok = true;
+    if (node->generate) return node->generate();  // системный файл
     return node->content;
 }
 
@@ -133,14 +134,39 @@ bool VirtualFs::writeFile(Host& host, const std::string& path, const std::string
     FsNode* parent = resolveMutable(host, dir);
     if (!parent || !parent->is_dir) return false;
 
+    // Нельзя перезаписывать каталог и системные (сгенерированные) файлы.
     auto it = parent->children.find(name);
-    if (it != parent->children.end() && it->second.is_dir) return false;
+    if (it != parent->children.end() && (it->second.is_dir || it->second.generate)) return false;
 
     FsNode node;
     node.is_dir = false;
     node.content = content;
     parent->children[name] = std::move(node);
     return true;
+}
+
+bool VirtualFs::addGeneratedFile(Host& host, const std::string& path,
+                                 std::function<std::string()> generate) {
+    if (path.empty() || path == "/" || path[0] != '/') return false;
+
+    std::size_t slash = path.find_last_of('/');
+    std::string dir = (slash == 0) ? "/" : path.substr(0, slash);
+    std::string name = path.substr(slash + 1);
+    if (name.empty()) return false;
+
+    FsNode* parent = resolveMutable(host, dir);
+    if (!parent || !parent->is_dir) return false;
+
+    FsNode node;
+    node.is_dir = false;
+    node.generate = std::move(generate);
+    parent->children[name] = std::move(node);
+    return true;
+}
+
+bool VirtualFs::isSystemFile(const Host& host, const std::string& path) {
+    const FsNode* node = resolve(host, path);
+    return node && !node->is_dir && static_cast<bool>(node->generate);
 }
 
 std::size_t VirtualFs::fileSize(const Host& host, const std::string& path) {

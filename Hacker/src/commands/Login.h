@@ -20,9 +20,12 @@ inline bool parsePort(const std::string& text, int& port) {
 }
 
 // Сверка пароля: до 3 попыток, пустой пароль — вход без запроса.
-// Сообщения об отказе выводит сама. true, если вход разрешён.
-inline bool authenticate(const Host& host, const std::string& user,
-                         const std::string& password_prompt, Terminal& term) {
+// Удачный вход запоминается в GameState; если для (хост, порт, логин)
+// уже есть подходящий сохранённый пароль, запрос пропускается.
+// Сообщения выводит сама. true, если вход разрешён.
+inline bool authenticate(Session& session, const Host& host, int port,
+                         const std::string& user, const std::string& password_prompt,
+                         Terminal& term) {
     const std::string* password = nullptr;
     for (const auto& acc : host.accounts) {
         if (acc.first == user) {
@@ -31,10 +34,25 @@ inline bool authenticate(const Host& host, const std::string& user,
         }
     }
 
+    // Пустой пароль — вход без запроса, но запись всё равно сохраняем.
+    if (password && password->empty()) {
+        session.gameState().record(host.name, port, user, "");
+        return true;
+    }
+
+    // Есть сохранённый пароль и он подходит — не спрашиваем.
+    const VisitedEntry* saved = session.gameState().find(host.name, port, user);
+    if (saved && password && !saved->pass.empty() && saved->pass == *password) {
+        term.print("Using saved credentials for " + user + "@" + host.name);
+        return true;
+    }
+
     for (int attempt = 0; attempt < 3; ++attempt) {
-        if (password && password->empty()) return true;
         std::string entered = term.readPassword(password_prompt);
-        if (password && entered == *password) return true;
+        if (password && entered == *password) {
+            session.gameState().record(host.name, port, user, entered);
+            return true;
+        }
         term.print("Access denied.");
     }
 
@@ -53,7 +71,7 @@ inline void enterShell(Session& session, const std::string& host_query,
 
 // Общие для ssh и scp проверки хоста/порта и вход. nullptr при ошибке.
 // cmd задаёт префикс сообщения "unknown host" (ssh или scp).
-inline const Host* sshConnect(const std::string& cmd, const World& world,
+inline const Host* sshConnect(const std::string& cmd, Session& session, const World& world,
                               const std::string& host_query, int port,
                               const std::string& user, Terminal& term) {
     const Host* host = world.findHost(host_query);
@@ -82,7 +100,8 @@ inline const Host* sshConnect(const std::string& cmd, const World& world,
     term.print("Connected to " + host->name + ".");
     term.pause(500);
 
-    if (!authenticate(*host, user, user + "@" + host->name + "'s password: ", term)) {
+    if (!authenticate(session, *host, port, user,
+                      user + "@" + host->name + "'s password: ", term)) {
         return nullptr;
     }
     return host;

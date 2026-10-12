@@ -1,15 +1,19 @@
 #pragma once
 
+#include <functional>
 #include <map>
 #include <string>
 #include <utility>
 #include <vector>
 
 // Узел виртуальной ФС: либо каталог (children), либо файл (content).
+// Сгенерированный (системный) файл не описывается в JSON, а получает
+// функцию, возвращающую текст (файл только для чтения).
 struct FsNode {
     bool is_dir = false;
     std::string content;                     // текст файла
     std::map<std::string, FsNode> children;  // содержимое каталога
+    std::function<std::string()> generate;   // если задана — системный файл
 };
 
 // Открытый порт: служба и необязательный баннер.

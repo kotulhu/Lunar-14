@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/ChatStore.h"
+#include "core/GameState.h"
 #include "core/Host.h"
 #include "core/Mailbox.h"
 #include "core/ResponseProvider.h"
@@ -35,6 +36,10 @@ public:
     // Изменяемый доступ: currentHost — верхняя сессия, localHost — домашний компьютер.
     Host& currentHost() { return *stack_.back().host; }
     Host& localHost() { return *stack_.front().host; }
+
+    // Состояние игры на запуск: список известных узлов (пароли и т.п.).
+    GameState& gameState() { return game_state_; }
+    const GameState& gameState() const { return game_state_; }
 
     void setCurrentDir(const std::string& dir) { stack_.back().dir = dir; }
 
@@ -77,6 +82,7 @@ private:
     std::vector<Download> downloads_;
     Mailbox mailbox_;
     ChatStore chat_;
+    GameState game_state_;
     std::unique_ptr<ResponseProvider> chat_provider_;
     bool quit_ = false;
 };

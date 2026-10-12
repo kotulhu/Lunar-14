@@ -35,7 +35,7 @@ void SshCommand::execute(Session& session, const World& world,
     std::string user = target.substr(0, at);
     std::string query = target.substr(at + 1);
 
-    const Host* host = sshConnect("ssh", world, query, port, user, term);
+    const Host* host = sshConnect("ssh", session, world, query, port, user, term);
     if (!host) return;
 
     enterShell(session, query, user, *host, term);

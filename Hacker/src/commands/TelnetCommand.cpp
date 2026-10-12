@@ -55,6 +55,6 @@ void TelnetCommand::execute(Session& session, const World& world,
         return;
     }
 
-    if (!authenticate(*host, login, "Password: ", term)) return;
+    if (!authenticate(session, *host, port, login, "Password: ", term)) return;
     enterShell(session, target, login, *host, term);
 }

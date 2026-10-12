@@ -25,6 +25,7 @@ add_executable(hacker
     Hacker/src/main.cpp
     Hacker/src/core/World.cpp
     Hacker/src/core/Session.cpp
+    Hacker/src/core/GameState.cpp
     Hacker/src/core/VirtualFs.cpp
     Hacker/src/core/Mailbox.cpp
     Hacker/src/core/ChatStore.cpp

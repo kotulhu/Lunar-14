@@ -49,7 +49,7 @@ void ScpCommand::execute(Session& session, const World& world,
     std::string remote_path = remote_spec.substr(colon + 1);
 
     // Общие проверки и вход (как у ssh).
-    const Host* host = sshConnect("scp", world, host_query, port, user, term);
+    const Host* host = sshConnect("scp", session, world, host_query, port, user, term);
     if (!host) return;
 
     // Удалённый путь: абсолютный или от start_dir хоста.

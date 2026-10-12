@@ -2,12 +2,21 @@
 
 #include <stdexcept>
 
+#include "core/VirtualFs.h"
 #include "core/World.h"
 
 Session::Session(World& world, const std::string& host_query) : world_(&world) {
     Host* host = world.findHost(host_query);
     if (!host) {
         throw std::runtime_error("unknown host: " + host_query);
+    }
+
+    // Список известных узлов доступен на домашнем компьютере всегда.
+    if (Host* home = world.findHost(world.playerHost())) {
+        std::string hdir = home->start_dir.empty() ? "/" : home->start_dir;
+        std::string path = (hdir == "/") ? "/visited" : hdir + "/visited";
+        VirtualFs::addGeneratedFile(*home, path,
+                                    [this] { return game_state_.renderVisited(); });
     }
 
     // Если аккаунтов нет, играем как guest.

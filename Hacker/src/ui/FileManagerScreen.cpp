@@ -337,6 +337,10 @@ private:
         }
 
         std::string dest_path = joinPath(panels_[1 - active_].dir, entry.name);
+        if (VirtualFs::isSystemFile(host, dest_path)) {
+            status_ = "Cannot overwrite system file";
+            return;
+        }
         bool existed = VirtualFs::exists(host, dest_path);
         if (!VirtualFs::writeFile(host, dest_path, content)) {
             status_ = "Cannot copy file";

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -26,6 +27,13 @@ public:
     // Создаёт или перезаписывает файл. false, если родительский каталог не найден
     // или путь указывает на каталог. Изменения живут только в памяти.
     static bool writeFile(Host& host, const std::string& path, const std::string& content);
+
+    // Добавляет сгенерированный (системный) файл: текст возвращает функция.
+    static bool addGeneratedFile(Host& host, const std::string& path,
+                                 std::function<std::string()> generate);
+
+    // true, если путь — сгенерированный (системный) файл.
+    static bool isSystemFile(const Host& host, const std::string& path);
 
     // Размер файла в байтах (0, если путь не файл).
     static std::size_t fileSize(const Host& host, const std::string& path);
