@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "core/ChatStore.h"
+#include "core/Notes.h"
 #include "core/ResponseProvider.h"
 #include "core/Session.h"
 #include "ui/Terminal.h"
@@ -180,7 +181,20 @@ private:
 
     void openCurrent() {
         const Contact* contact = current();
-        if (contact) session_.chat().openContact(contact->id);
+        if (!contact) return;
+        session_.chat().openContact(contact->id);
+        noteChat(*contact);
+    }
+
+    // Заносит в журнал сообщения чата, упоминающие другие узлы.
+    void noteChat(const Contact& contact) {
+        const std::vector<ChatMessage>& history = session_.chat().history(contact.id);
+        for (const ChatMessage& message : history) {
+            noteDocument(session_, "chat", session_.hostName(),
+                         contact.name + ": " + message.text,
+                         "chat:" + contact.id + ":" + message.from + ":" + message.text,
+                         message.text);
+        }
     }
 
     void move(int delta) {
@@ -352,6 +366,9 @@ private:
                 session_.chat().add(
                     job.contact_id,
                     ChatMessage{job.contact_id, answer, terminal_.localTimeHM()});
+                if (const Contact* contact = session_.chat().find(job.contact_id)) {
+                    noteChat(*contact);
+                }
             }
         }
         refreshStatus();

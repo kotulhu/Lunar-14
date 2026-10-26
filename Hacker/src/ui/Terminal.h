@@ -19,6 +19,12 @@ public:
 
     void pause(int milliseconds);               // пауза в миллисекундах
 
+    // Отключает паузы (ключ --no-delay).
+    void setNoDelay(bool value) { no_delay_ = value; }
+
     // Текущее локальное время в формате "HH:MM" (формируется только здесь).
     std::string localTimeHM() const;
+
+private:
+    bool no_delay_ = false;
 };

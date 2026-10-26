@@ -72,6 +72,31 @@ std::string SaveGame::serialize(const Session& session) {
     }
     state["visited"] = std::move(visited);
 
+    // journal: записи приложения visited — посещения и найденные документы.
+    json journal = json::array();
+    for (const JournalEntry& e : session.gameState().journal()) {
+        json node;
+        node["key"] = e.key;
+        node["kind"] = e.kind;
+        node["host"] = e.host;
+        node["port"] = e.port;
+        node["user"] = e.user;
+        if (!e.source.empty()) node["source"] = e.source;
+        node["title"] = e.title;
+        if (!e.text.empty()) node["text"] = e.text;
+        node["mentioned"] = e.mentioned;
+        node["stage"] = e.stage;
+        node["date"] = e.date;
+        journal.push_back(std::move(node));
+    }
+    state["journal"] = std::move(journal);
+
+    // events: id сработавших правил (порядок не важен).
+    state["events"] = session.gameState().firedEvents();
+
+    // finished: пройдена ли финальная рассылка.
+    state["finished"] = session.gameState().finished();
+
     // mailbox: письма целиком в текущем порядке.
     json mailbox = json::array();
     for (const Message& m : session.mailbox().messages()) {
@@ -171,6 +196,56 @@ bool SaveGame::deserialize(const std::string& text, Session& session, const Worl
                 ++skipped;
             }
         }
+    }
+
+    // journal: записи приложения visited; восстанавливаем как есть. Старые
+    // сохранения без этого раздела просто начинают журнал с нуля.
+    if (state.contains("journal") && state["journal"].is_array()) {
+        for (const json& node : state["journal"]) {
+            try {
+                if (!node.is_object()) {
+                    ++skipped;
+                    continue;
+                }
+                JournalEntry e;
+                e.key = node.value("key", std::string());
+                if (e.key.empty()) {
+                    ++skipped;
+                    continue;
+                }
+                e.kind = node.value("kind", std::string());
+                e.host = node.value("host", std::string());
+                e.port = node.value("port", 0);
+                e.user = node.value("user", std::string());
+                e.source = node.value("source", std::string());
+                e.title = node.value("title", std::string());
+                e.text = node.value("text", std::string());
+                e.stage = node.value("stage", std::string());
+                e.date = node.value("date", std::string());
+                if (node.contains("mentioned") && node["mentioned"].is_array()) {
+                    for (const json& m : node["mentioned"]) {
+                        if (m.is_string()) e.mentioned.push_back(m.get<std::string>());
+                    }
+                }
+                session.gameState().addJournal(std::move(e));
+            } catch (const std::exception&) {
+                ++skipped;
+            }
+        }
+    }
+
+    // events: id сработавших правил; неизвестные id просто игнорируются.
+    if (state.contains("events") && state["events"].is_array()) {
+        for (const json& node : state["events"]) {
+            if (node.is_string()) {
+                session.gameState().markEventFired(node.get<std::string>());
+            }
+        }
+    }
+
+    // finished: отсутствующее значение трактуем как false.
+    if (state.contains("finished") && state["finished"].is_boolean()) {
+        session.gameState().setFinished(state["finished"].get<bool>());
     }
 
     // mailbox: загруженный ящик заменяет стартовый из mail.json. Если раздела

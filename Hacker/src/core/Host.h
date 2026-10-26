@@ -31,13 +31,15 @@ struct Host {
     std::vector<std::pair<std::string, std::string>> accounts;  // пары логин/пароль
     FsNode root;                                                // корень файловой системы
     std::string start_dir = "/";                                // стартовый каталог сессии
+    int reach = 0;                                              // охват узла (компьютеров)
     std::vector<std::string> commands;                          // разрешённые команды
     bool all_commands = false;                                  // true, если "commands": "*"
 
     // Разрешена ли команда на этом хосте. help и exit доступны всегда.
-    bool allows(const std::string& command) const {
+    // explicitOnly-команда не попадает под "*": её имя должно быть в списке.
+    bool allows(const std::string& command, bool explicit_only = false) const {
         if (command == "help" || command == "exit") return true;
-        if (all_commands) return true;
+        if (all_commands && !explicit_only) return true;
         for (const std::string& c : commands) {
             if (c == command) return true;
         }

@@ -1,5 +1,6 @@
 #include "commands/CatCommand.h"
 
+#include "core/Notes.h"
 #include "core/Session.h"
 #include "core/VirtualFs.h"
 #include "ui/Terminal.h"
@@ -27,4 +28,6 @@ void CatCommand::execute(Session& session, const World&,
     }
 
     term.print(content);
+    noteDocument(session, "file", session.hostName(), full,
+                 "file:" + session.hostName() + ":" + full, content);
 }

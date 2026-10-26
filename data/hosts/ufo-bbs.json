@@ -1,0 +1,24 @@
+{
+  "ip": "203.0.113.33",
+  "name": "ufo-bbs",
+  "alive": true,
+  "ports": {
+    "23": { "service": "telnet", "banner": "BBS ufo-bbs" }
+  },
+  "accounts": [["guest", "Houston1969"]],
+  "start_dir": "/",
+  "reach": 120,
+  "commands": ["ls", "cat"],
+  "fs": {
+    "etc": {
+      "motd": "ufo-bbs. Входа нет, только чтение. Не пишите — пишите им."
+    },
+    "readme.txt": "Доска объявлений. Объявления лежат в posts/, по номерам. Старые стирают, но не все.",
+    "posts": {
+      "0001.txt": { "$file": "board/0001.txt" },
+      "0002.txt": { "$file": "board/0002.txt" },
+      "0003.txt": { "$file": "board/0003.txt" },
+      "0004.txt": { "$file": "board/0004.txt" }
+    }
+  }
+}

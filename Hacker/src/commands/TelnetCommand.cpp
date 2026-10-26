@@ -4,6 +4,7 @@
 
 #include "commands/Login.h"
 #include "core/Host.h"
+#include "core/Notes.h"
 #include "core/World.h"
 #include "ui/Terminal.h"
 
@@ -49,12 +50,17 @@ void TelnetCommand::execute(Session& session, const World& world,
     term.print("Connected to " + host->name + ".");
     term.pause(500);
 
+    // Автовход: если узел уже посещён, берём сохранённый логин без запроса.
     std::string login;
-    if (!term.readLine("login: ", login)) {
+    const VisitedEntry* saved = session.gameState().latestFor(host->name, port);
+    if (saved) {
+        login = saved->user;
+    } else if (!term.readLine("login: ", login)) {
         term.print("Connection closed by foreign host.");
         return;
     }
 
     if (!authenticate(session, *host, port, login, "Password: ", term)) return;
+    noteVisit(session, host->name, port, login);
     enterShell(session, target, login, *host, term);
 }

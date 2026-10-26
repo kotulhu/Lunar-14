@@ -1,0 +1,25 @@
+{
+  "delay_ms": 500,
+  "lines": [
+    { "type": "title", "text": "ПОСЛАНИЕ ДОСТАВЛЕНО" },
+    { "type": "blank" },
+    { "type": "text", "text": "Список тех, кто услышал твой сигнал:" },
+    { "type": "delivered", "host": "home-pc", "text": "Твой собственный компьютер", "note": "слегка испугался" },
+    { "type": "delivered", "host": "old-mailserver", "text": "Старый почтовый сервер" },
+    { "type": "delivered", "host": "jsc-archive", "text": "Архив центра управления" },
+    { "type": "delivered", "host": "relay-hub", "text": "Ретрансляционный узел" },
+    { "type": "delivered", "host": "ufo-bbs", "text": "Доска объявлений" },
+    { "type": "blank" },
+    { "type": "text", "text": "Ни один рептилоид при этом не пострадал." },
+    { "type": "blank" },
+    { "type": "credit", "role": "Режиссёр", "name": "Первый" },
+    { "type": "credit", "role": "Консультант по заговорам", "name": "не раскрывается" },
+    { "type": "blank" },
+    { "type": "total" },
+    { "type": "ending", "tiers": [
+      { "min": 0, "text": "Пока это лишь шёпот в проводах." },
+      { "min": 100000, "text": "Уже полстраны ловит помехи в телевизоре." },
+      { "min": 1000000, "text": "Ты разбудил слишком многих. Поздравляем." }
+    ] }
+  ]
+}

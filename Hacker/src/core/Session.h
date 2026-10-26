@@ -6,12 +6,15 @@
 #include <vector>
 
 #include "core/ChatStore.h"
+#include "core/Credits.h"
 #include "core/GameState.h"
 #include "core/Host.h"
 #include "core/Mailbox.h"
+#include "core/Quest.h"
 #include "core/ResponseProvider.h"
 
 class World;
+class EventEngine;
 
 // Запись о скачанном файле (пока не показывается, нужна для будущих очков и улик).
 struct Download {
@@ -26,12 +29,20 @@ public:
     // Создаёт нижнюю сессию на хосте, найденном по ip или имени.
     // Бросает std::runtime_error, если хост не найден.
     Session(World& world, const std::string& host_query);
+    ~Session();
 
     const Host& host() const { return *stack_.back().host; }
     const std::string& hostName() const { return stack_.back().host_name; }
     const std::string& hostIp() const { return stack_.back().host_ip; }
     const std::string& user() const { return stack_.back().user; }
     const std::string& currentDir() const { return stack_.back().dir; }
+
+    // Логин игрока на домашнем хосте (нижняя сессия).
+    const std::string& localUser() const { return stack_.front().user; }
+
+    // Игровой мир, из которого построена сессия.
+    World& world() { return *world_; }
+    const World& world() const { return *world_; }
 
     // Изменяемый доступ: currentHost — верхняя сессия, localHost — домашний компьютер.
     Host& currentHost() { return *stack_.back().host; }
@@ -68,6 +79,23 @@ public:
     void requestQuit() { quit_ = true; }
     bool quitRequested() const { return quit_; }
 
+    // Движок правил событий (может быть не установлен).
+    EventEngine* events() { return event_engine_.get(); }
+    const EventEngine* events() const { return event_engine_.get(); }
+    void setEventEngine(std::unique_ptr<EventEngine> engine);
+
+    // Титры финальной рассылки.
+    Credits& credits() { return credits_; }
+    const Credits& credits() const { return credits_; }
+
+    // Этапы квеста (могут быть не установлены).
+    Quest* quest() { return quest_.get(); }
+    const Quest* quest() const { return quest_.get(); }
+    void setQuest(std::unique_ptr<Quest> quest);
+
+    // Текущий этап квеста по состоянию игры. nullptr, если этапов нет.
+    const QuestStage* currentStage() const;
+
 private:
     struct Frame {
         Host* host = nullptr;
@@ -83,6 +111,9 @@ private:
     Mailbox mailbox_;
     ChatStore chat_;
     GameState game_state_;
+    Credits credits_;
     std::unique_ptr<ResponseProvider> chat_provider_;
+    std::unique_ptr<EventEngine> event_engine_;
+    std::unique_ptr<Quest> quest_;
     bool quit_ = false;
 };

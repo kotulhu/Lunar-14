@@ -4,6 +4,7 @@
 
 #include "commands/Login.h"
 #include "core/Host.h"
+#include "core/Notes.h"
 #include "core/World.h"
 #include "ui/Terminal.h"
 
@@ -38,5 +39,6 @@ void SshCommand::execute(Session& session, const World& world,
     const Host* host = sshConnect("ssh", session, world, query, port, user, term);
     if (!host) return;
 
+    noteVisit(session, host->name, port, user);
     enterShell(session, query, user, *host, term);
 }

@@ -43,6 +43,7 @@ bool Terminal::readLine(const std::string& prompt, std::string& out) {
 }
 
 void Terminal::pause(int milliseconds) {
+    if (no_delay_) return;
     std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
 }
 

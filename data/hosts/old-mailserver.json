@@ -8,6 +8,7 @@
   },
   "accounts": [["guest", "guest"]],
   "start_dir": "/home/guest",
+  "reach": 340,
   "commands": ["ls", "cat"],
   "fs": {
     "etc": {

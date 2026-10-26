@@ -5,6 +5,7 @@
   "ports": {},
   "accounts": [["hacker", ""]],
   "start_dir": "/home/hacker",
+  "reach": 1,
   "commands": "*",
   "fs": {
     "home": {

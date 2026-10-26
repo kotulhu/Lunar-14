@@ -6,7 +6,7 @@ class Session;
 class World;
 
 // Сохранение игры: состояние сессии в читаемом JSON и его загрузка.
-// Формат: { "version": 1, "state": { visited, mailbox, chat, files } }.
+// Формат: { "version": 1, "state": { visited, journal, events, finished, mailbox, chat, files } }.
 // Неизвестные разделы игнорируются, отсутствующие берутся по умолчанию.
 namespace SaveGame {
 

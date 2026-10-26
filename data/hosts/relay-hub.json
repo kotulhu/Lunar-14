@@ -1,0 +1,15 @@
+{
+  "ip": "203.0.113.10",
+  "name": "relay-hub",
+  "alive": true,
+  "ports": {
+    "23": { "service": "telnet", "banner": "Relay telnetd" }
+  },
+  "accounts": [["operator", "relay"]],
+  "start_dir": "/",
+  "reach": 5000,
+  "commands": ["ls", "cat", "cd", "pwd", "broadcast"],
+  "fs": {
+    "readme.txt": "Ретранслятор. Для рассылки введите broadcast."
+  }
+}

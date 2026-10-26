@@ -13,7 +13,9 @@ void HelpCommand::execute(Session& session, const World&,
     // Показываем только то, что разрешено на текущем хосте.
     std::vector<Command*> commands;
     for (Command* c : registry_.all()) {
-        if (session.host().allows(c->name())) commands.push_back(c);
+        if (session.host().allows(c->name(), registry_.explicitOnly(c->name()))) {
+            commands.push_back(c);
+        }
     }
 
     // Выравниваем описания по самой длинной команде.

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "start",
+    "name": "Начало",
+    "date": "11 Mar 1999",
+    "when": {}
+  },
+  {
+    "id": "recon",
+    "name": "Разведка",
+    "date": "12 Mar 1999",
+    "when": { "visited": "old-mailserver" }
+  },
+  {
+    "id": "archive",
+    "name": "Архив",
+    "date": "14 Mar 1999",
+    "when": { "visited": ["old-mailserver", "jsc-archive"] }
+  },
+  {
+    "id": "relay",
+    "name": "Ретранслятор",
+    "date": "16 Mar 1999",
+    "when": { "visited": ["old-mailserver", "jsc-archive", "relay-hub"] }
+  },
+  {
+    "id": "final",
+    "name": "Разоблачение",
+    "date": "16 Mar 1999",
+    "when": { "finished": true }
+  }
+]

@@ -1,0 +1,40 @@
+[
+  {
+    "id": "newsletter",
+    "when": { "visited": "old-mailserver" },
+    "do": [
+      { "mail": "newsletter-1" }
+    ]
+  },
+  {
+    "id": "jsc-archive-alert",
+    "when": { "visited": "jsc-archive" },
+    "do": [
+      { "mail": "threat-1" },
+      { "mail": "wolf-letter" },
+      { "chat": { "contact": "ghost", "text": "Ты был там. Они уже знают." } },
+      { "unlock_contact": "wolf" },
+      { "chat": { "contact": "wolf", "text": "Ха! Значит, добрался до архива. Молодец, парень. Только не суйся в бумаги про «Меркурий» — за них увольняют. Или того хуже. Скоро напишу ещё." } }
+    ]
+  },
+  {
+    "id": "bribe",
+    "when": { "visited_count": 2 },
+    "do": [ { "mail": "bribe-1" } ]
+  },
+  {
+    "id": "bbs-intro",
+    "when": { "visited": "ufo-bbs" },
+    "do": [
+      { "unlock_contact": "diona" },
+      { "chat": { "contact": "wolf", "text": "Ты на доске. Тише читай: тут пишут все. И те, кого нельзя называть." } }
+    ]
+  },
+  {
+    "id": "last-warning",
+    "when": { "visited": "relay-hub" },
+    "do": [
+      { "mail": "plea-1" }
+    ]
+  }
+]

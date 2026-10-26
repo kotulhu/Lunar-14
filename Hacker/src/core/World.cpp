@@ -158,6 +158,20 @@ bool parseHost(const json& h, const std::string& filename, const std::string& te
     }
     if (host.start_dir.empty()) host.start_dir = "/";
 
+    // Охват узла: необязательное целое >= 0.
+    if (h.contains("reach")) {
+        if (!h["reach"].is_number_integer()) {
+            error = where + "'reach' must be an integer";
+            return false;
+        }
+        int reach = h["reach"].get<int>();
+        if (reach < 0) {
+            error = where + "'reach' must not be negative";
+            return false;
+        }
+        host.reach = reach;
+    }
+
     // Порты заданы объектом {"22": {"service": "ssh", ...}, ...}.
     if (h.contains("ports")) {
         const json& ports = h["ports"];

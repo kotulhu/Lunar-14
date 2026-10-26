@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "commands/AboutCommand.h"
+#include "commands/BroadcastCommand.h"
 #include "commands/CatCommand.h"
 #include "commands/CdCommand.h"
 #include "commands/ChatCommand.h"
@@ -23,6 +24,9 @@
 #include "commands/ScpCommand.h"
 #include "commands/SshCommand.h"
 #include "commands/TelnetCommand.h"
+#include "commands/VisitedCommand.h"
+#include "core/EventEngine.h"
+#include "core/Quest.h"
 #include "core/Session.h"
 #include "core/ProviderFactory.h"
 #include "core/SaveGame.h"
@@ -175,7 +179,7 @@ static void printBootBanner(Terminal& term, const Registry& registry,
     // Только то, что разрешено на текущем хосте (как в help), именами в строку.
     std::string line;
     for (Command* c : registry.all()) {
-        if (!session.host().allows(c->name())) continue;
+        if (!session.host().allows(c->name(), registry.explicitOnly(c->name()))) continue;
         std::string token = " " + c->name();
         if (line.size() + token.size() > 78) {
             term.print(line);
@@ -190,13 +194,14 @@ static void printBootBanner(Terminal& term, const Registry& registry,
 
 int main(int argc, char** argv) {
     // Необязательные аргументы: --start-host <ip|имя>, --unlock-contacts,
-    // --data-dir <путь>, --save-dir <путь>, --new, --no-save.
+    // --data-dir <путь>, --save-dir <путь>, --new, --no-save, --no-delay.
     std::string start_host;
     std::string data_dir;
     std::string save_dir;
     bool unlock_contacts = false;
     bool new_game = false;
     bool no_save = false;
+    bool no_delay = false;
     bool show_version = false;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -210,6 +215,8 @@ int main(int argc, char** argv) {
             new_game = true;
         } else if (arg == "--no-save") {
             no_save = true;
+        } else if (arg == "--no-delay") {
+            no_delay = true;
         } else if (arg == "-v" || arg == "--version") {
             show_version = true;
         } else if (arg == "--unlock-contacts") {
@@ -235,6 +242,7 @@ int main(int argc, char** argv) {
     }
 
     Terminal term;
+    term.setNoDelay(no_delay);
 
     std::unique_ptr<Session> session;
     try {
@@ -270,6 +278,28 @@ int main(int argc, char** argv) {
     }
     session->setChatProvider(std::move(provider));
 
+    // Движок правил событий: шаблоны писем и события (нужны загруженный мир и чат).
+    auto engine = std::make_unique<EventEngine>();
+    if (!engine->load(data_dir, world, session->chat(), error)) {
+        std::cerr << "Failed to load events: " << error << "\n";
+        return 1;
+    }
+    session->setEventEngine(std::move(engine));
+
+    // Титры финальной рассылки broadcast.
+    if (!session->credits().load(dataPath(data_dir, "credits.json"), world, error)) {
+        std::cerr << "Failed to load credits: " << error << "\n";
+        return 1;
+    }
+
+    // Этапы квеста для приложения visited.
+    auto quest = std::make_unique<Quest>();
+    if (!quest->load(data_dir, world, error)) {
+        std::cerr << "Failed to load quest: " << error << "\n";
+        return 1;
+    }
+    session->setQuest(std::move(quest));
+
     // Папка и файл сохранения. --no-save полностью отключает работу с ним.
     bool saving_enabled = !no_save;
     std::string save_path;
@@ -303,6 +333,8 @@ int main(int argc, char** argv) {
     registry.add(std::make_unique<FmCommand>());
     registry.add(std::make_unique<MailCommand>());
     registry.add(std::make_unique<ChatCommand>());
+    registry.add(std::make_unique<BroadcastCommand>(), /*explicitOnly=*/true);
+    registry.add(std::make_unique<VisitedCommand>());
     registry.add(std::make_unique<ExitCommand>());
 
     printBootSequence(term, *session);
@@ -406,13 +438,24 @@ int main(int argc, char** argv) {
 
         // Проверка белого списка команд текущего хоста — в одном месте.
         Command* command = registry.find(command_name);
-        if (!command || !session->host().allows(command_name)) {
+        if (!command ||
+            !session->host().allows(command_name, registry.explicitOnly(command_name))) {
             term.print(command_name + ": command not found. Type 'help'.");
             continue;
         }
 
+        // Уведомления о новых письмах и сообщениях — по одной строке за команду.
+        int mail_before = session->mailbox().unreadCount();
+        int chat_before = session->chat().unreadVisible();
         command->execute(*session, world, args, term);
         saveIfNeeded();
+
+        if (session->mailbox().unreadCount() > mail_before) {
+            term.print("You have new mail.");
+        }
+        if (session->chat().unreadVisible() > chat_before) {
+            term.print("New chat message.");
+        }
 
         if (session->quitRequested()) break;
     }

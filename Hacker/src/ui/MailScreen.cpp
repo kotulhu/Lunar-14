@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "core/Mailbox.h"
+#include "core/Notes.h"
 #include "core/Session.h"
 
 #include <ftxui/component/component.hpp>
@@ -241,6 +242,11 @@ private:
     void openSelected() {
         if (selected_ < 0 || selected_ >= count()) return;
         session_.mailbox().markRead(selected_);  // открытие помечает письмо прочитанным
+        const Message& message = messages()[selected_];
+        std::string text = message.from + " " + message.subject;
+        for (const std::string& line : message.body) text += " " + line;
+        noteDocument(session_, "mail", session_.hostName(), message.subject,
+                     "mail:" + std::to_string(message.id), text);
         view_index_ = selected_;
         view_scroll_ = 0;
         view_ = true;
