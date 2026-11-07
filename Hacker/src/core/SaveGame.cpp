@@ -97,6 +97,9 @@ std::string SaveGame::serialize(const Session& session) {
     // finished: пройдена ли финальная рассылка.
     state["finished"] = session.gameState().finished();
 
+    // payload_ready: mailsend загрузил data-файл на ретранслятор.
+    state["payload_ready"] = session.gameState().payloadReady();
+
     // mailbox: письма целиком в текущем порядке.
     json mailbox = json::array();
     for (const Message& m : session.mailbox().messages()) {
@@ -138,6 +141,9 @@ std::string SaveGame::serialize(const Session& session) {
         files[host.first] = std::move(host_files);
     }
     state["files"] = std::move(files);
+
+    // downloads: локальные скачанные файлы с исходным типом и источником.
+    state["downloads"] = json::parse(session.localStorage().toJson());
 
     root["state"] = std::move(state);
     return root.dump(2);
@@ -248,6 +254,11 @@ bool SaveGame::deserialize(const std::string& text, Session& session, const Worl
         session.gameState().setFinished(state["finished"].get<bool>());
     }
 
+    // payload_ready: в старых сохранениях поля нет — payload ещё не загружен.
+    if (state.contains("payload_ready") && state["payload_ready"].is_boolean()) {
+        session.gameState().setPayloadReady(state["payload_ready"].get<bool>());
+    }
+
     // mailbox: загруженный ящик заменяет стартовый из mail.json. Если раздела
     // нет, остаётся стартовый ящик (значение по умолчанию).
     if (state.contains("mailbox") && state["mailbox"].is_array()) {
@@ -313,6 +324,16 @@ bool SaveGame::deserialize(const std::string& text, Session& session, const Worl
                     ++skipped;
                 }
             }
+        }
+    }
+
+    // downloads отсутствует в старых сохранениях — начинаем с пустого хранилища.
+    session.localStorage() = LocalStorage{};
+    if (state.contains("downloads")) {
+        std::string downloads_error;
+        if (!session.localStorage().fromJson(state["downloads"].dump(), downloads_error)) {
+            error = "save: " + downloads_error;
+            return false;
         }
     }
 

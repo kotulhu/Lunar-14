@@ -6,14 +6,20 @@
 #include <utility>
 #include <vector>
 
-// Узел виртуальной ФС: либо каталог (children), либо файл (content).
+class Session;
+
+enum class FileType { Text, Data, Program, Keygen, Virus, Antivirus };
+
+// Узел виртуальной ФС: либо каталог (children), либо типизированный файл.
 // Сгенерированный (системный) файл не описывается в JSON, а получает
 // функцию, возвращающую текст (файл только для чтения).
 struct FsNode {
     bool is_dir = false;
     std::string content;                     // текст файла
+    FileType type = FileType::Text;
+    std::string program_id;                  // id обработчика для Program
     std::map<std::string, FsNode> children;  // содержимое каталога
-    std::function<std::string()> generate;   // если задана — системный файл
+    std::function<std::string(Session*)> generate;  // если задана — системный файл
 };
 
 // Открытый порт: служба и необязательный баннер.
@@ -35,10 +41,14 @@ struct Host {
     std::vector<std::string> commands;                          // разрешённые команды
     bool all_commands = false;                                  // true, если "commands": "*"
 
-    // Разрешена ли команда на этом хосте. help и exit доступны всегда.
+    // Базовые файловые команды, help/exit, scp, downloads и run доступны с
+    // любого хоста: ограничения узла не должны мешать навигации и запуску
+    // локально скачанных программ.
     // explicitOnly-команда не попадает под "*": её имя должно быть в списке.
     bool allows(const std::string& command, bool explicit_only = false) const {
-        if (command == "help" || command == "exit") return true;
+        if (command == "help" || command == "exit" || command == "scp" ||
+            command == "downloads" || command == "run" || command == "ls" ||
+            command == "cat" || command == "cd" || command == "pwd") return true;
         if (all_commands && !explicit_only) return true;
         for (const std::string& c : commands) {
             if (c == command) return true;

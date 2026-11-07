@@ -3,6 +3,8 @@
 #include <set>
 
 #include "core/Host.h"
+#include "core/EventEngine.h"
+#include "core/Session.h"
 
 namespace {
 
@@ -82,8 +84,32 @@ std::string parentDir(const std::string& path) {
 
 }  // namespace
 
+bool VirtualFs::isReservedPath(const std::string& path) {
+    std::string segment;
+    for (std::size_t i = 0; i <= path.size(); ++i) {
+        if (i == path.size() || path[i] == '/') {
+            if (segment == "downloads") return true;
+            segment.clear();
+        } else {
+            segment += path[i];
+        }
+    }
+    return false;
+}
+
 std::string VirtualFs::normalize(const std::string& current_dir, const std::string& path) {
-    std::string combined = join(current_dir, path);
+    std::string expanded = path;
+    if (expanded == "~" || expanded.rfind("~/", 0) == 0) {
+        // В симуляции домашний каталог определяется по /home/<user> текущего
+        // пути; вне него используется домашний каталог локального игрока.
+        std::string home = "/home/hacker";
+        if (current_dir.rfind("/home/", 0) == 0) {
+            std::size_t end = current_dir.find('/', 6);
+            home = current_dir.substr(0, end);
+        }
+        expanded = home + expanded.substr(1);
+    }
+    std::string combined = join(current_dir, expanded);
 
     // Разбираем путь на сегменты, обрабатывая "." и "..".
     std::vector<std::string> parts;
@@ -113,6 +139,7 @@ std::string VirtualFs::normalize(const std::string& current_dir, const std::stri
 
 std::vector<std::string> VirtualFs::list(const Host& host, const std::string& dir,
                                          bool show_hidden) {
+    if (isReservedPath(dir)) return {};
     const FsNode* node = resolve(host, dir);
     if (!node || !node->is_dir) return {};
 
@@ -138,18 +165,37 @@ std::vector<std::string> VirtualFs::list(const Host& host, const std::string& di
 }
 
 bool VirtualFs::isDirectory(const Host& host, const std::string& path) {
+    if (isReservedPath(path)) return false;
     const FsNode* node = resolve(host, path);
     return node && node->is_dir;
 }
 
+FileType VirtualFs::typeOf(const Host& host, const std::string& path) {
+    if (isReservedPath(path)) return FileType::Text;
+    const FsNode* node = resolve(host, path);
+    return node && !node->is_dir ? node->type : FileType::Text;
+}
+
+std::string VirtualFs::programIdOf(const Host& host, const std::string& path) {
+    const FsNode* node = resolve(host, path);
+    return node && !node->is_dir ? node->program_id : std::string();
+}
+
 bool VirtualFs::exists(const Host& host, const std::string& path) {
+    if (isReservedPath(path)) return false;
     if (overlayLookup(host, path)) return true;
     return resolve(host, path) != nullptr;
 }
 
-std::string VirtualFs::readFile(const Host& host, const std::string& path, bool& ok) {
+std::string VirtualFs::readFile(const Host& host, const std::string& path, bool& ok,
+                                Session* session) {
+    if (isReservedPath(path)) {
+        ok = false;
+        return {};
+    }
     if (const std::string* edited = overlayLookup(host, path)) {
         ok = true;
+        if (session && session->events()) session->events()->onFileRead(host.name, path);
         return *edited;  // перезаписанный игроком файл
     }
     const FsNode* node = resolve(host, path);
@@ -158,12 +204,13 @@ std::string VirtualFs::readFile(const Host& host, const std::string& path, bool&
         return {};
     }
     ok = true;
-    if (node->generate) return node->generate();  // системный файл
-    return node->content;
+    std::string content = node->generate ? node->generate(session) : node->content;
+    if (session && session->events()) session->events()->onFileRead(host.name, path);
+    return content;
 }
 
 bool VirtualFs::writeFile(const Host& host, const std::string& path, const std::string& content) {
-    if (path.empty() || path == "/" || path[0] != '/') return false;
+    if (path.empty() || path == "/" || path[0] != '/' || isReservedPath(path)) return false;
 
     std::size_t slash = path.find_last_of('/');
     std::string dir = (slash == 0) ? "/" : path.substr(0, slash);
@@ -182,30 +229,55 @@ bool VirtualFs::writeFile(const Host& host, const std::string& path, const std::
 }
 
 bool VirtualFs::addGeneratedFile(Host& host, const std::string& path,
-                                 std::function<std::string()> generate) {
-    if (path.empty() || path == "/" || path[0] != '/') return false;
+                                 std::function<std::string(Session*)> generate) {
+    if (path.empty() || path == "/" || path[0] != '/' || isReservedPath(path)) return false;
 
-    std::size_t slash = path.find_last_of('/');
-    std::string dir = (slash == 0) ? "/" : path.substr(0, slash);
-    std::string name = path.substr(slash + 1);
-    if (name.empty()) return false;
+    if (!host.root.is_dir) host.root.is_dir = true;
 
-    FsNode* parent = resolveMutable(host, dir);
-    if (!parent || !parent->is_dir) return false;
+    FsNode* current = &host.root;
+    std::string segment;
+    for (std::size_t i = 1; i <= path.size(); ++i) {
+        if (i != path.size() && path[i] != '/') {
+            segment += path[i];
+            continue;
+        }
+        if (segment.empty()) continue;
 
-    FsNode node;
-    node.is_dir = false;
-    node.generate = std::move(generate);
-    parent->children[name] = std::move(node);
-    return true;
+        const bool last = (i == path.size());
+        if (last) {
+            auto it = current->children.find(segment);
+            if (it != current->children.end() && it->second.is_dir) return false;
+            FsNode node;
+            node.is_dir = false;
+            node.generate = std::move(generate);
+            current->children[segment] = std::move(node);
+            return true;
+        }
+
+        auto it = current->children.find(segment);
+        if (it == current->children.end()) {
+            FsNode dir;
+            dir.is_dir = true;
+            current->children[segment] = std::move(dir);
+            current = &current->children[segment];
+        } else if (!it->second.is_dir) {
+            return false;
+        } else {
+            current = &it->second;
+        }
+        segment.clear();
+    }
+    return false;
 }
 
 bool VirtualFs::isSystemFile(const Host& host, const std::string& path) {
+    if (isReservedPath(path)) return false;
     const FsNode* node = resolve(host, path);
     return node && !node->is_dir && static_cast<bool>(node->generate);
 }
 
 std::size_t VirtualFs::fileSize(const Host& host, const std::string& path) {
+    if (isReservedPath(path)) return 0;
     if (const std::string* edited = overlayLookup(host, path)) return edited->size();
     const FsNode* node = resolve(host, path);
     if (!node || node->is_dir) return 0;

@@ -36,10 +36,15 @@ inline bool samePassword(const std::string& a, const std::string& b) {
 
 // Выполняет правила при успешном входе (после записи в GameState.visited).
 inline void fireLoginEvent(Session& session, const Host& host, Terminal& term) {
+    (void)term;
     if (EventEngine* engine = session.events()) {
-        engine->fire({"login", host.name}, session,
-                     [&term] { return term.localTimeHM(); });
+        engine->onLogin(host.name);
     }
+}
+
+inline void logAuth(Session& session, Terminal& term, const std::string& service,
+                    const std::string& user, const std::string& target, int port, bool ok) {
+    session.logConnection(term.localTimeHM(), service, user, target, port, ok);
 }
 
 // Сверка пароля: до 3 попыток, пустой пароль — вход без запроса.
@@ -48,7 +53,7 @@ inline void fireLoginEvent(Session& session, const Host& host, Terminal& term) {
 // Сообщения выводит сама. true, если вход разрешён.
 inline bool authenticate(Session& session, const Host& host, int port,
                          const std::string& user, const std::string& password_prompt,
-                         Terminal& term) {
+                         Terminal& term, const std::string& service) {
     const std::string* password = nullptr;
     for (const auto& acc : host.accounts) {
         if (acc.first == user) {
@@ -60,6 +65,7 @@ inline bool authenticate(Session& session, const Host& host, int port,
     // Пустой пароль — вход без запроса, но запись всё равно сохраняем.
     if (password && password->empty()) {
         session.gameState().record(host.name, port, user, "");
+        logAuth(session, term, service, user, host.name, port, true);
         fireLoginEvent(session, host, term);
         return true;
     }
@@ -68,6 +74,7 @@ inline bool authenticate(Session& session, const Host& host, int port,
     const VisitedEntry* saved = session.gameState().find(host.name, port, user);
     if (saved && password && !saved->pass.empty() && samePassword(saved->pass, *password)) {
         term.print("Using saved credentials for " + user + "@" + host.name);
+        logAuth(session, term, service, user, host.name, port, true);
         fireLoginEvent(session, host, term);
         return true;
     }
@@ -77,9 +84,11 @@ inline bool authenticate(Session& session, const Host& host, int port,
         if (Signals::interrupted()) return false;  // Ctrl+C — прерываем вход
         if (password && samePassword(entered, *password)) {
             session.gameState().record(host.name, port, user, entered);
+            logAuth(session, term, service, user, host.name, port, true);
             fireLoginEvent(session, host, term);
             return true;
         }
+        logAuth(session, term, service, user, host.name, port, false);
         term.print("Access denied.");
     }
 
@@ -91,7 +100,7 @@ inline bool authenticate(Session& session, const Host& host, int port,
 inline void enterShell(Session& session, const std::string& host_query,
                        const std::string& user, const Host& host, Terminal& term) {
     bool has_motd = false;
-    std::string motd = VirtualFs::readFile(host, "/etc/motd", has_motd);
+    std::string motd = VirtualFs::readFile(host, "/etc/motd", has_motd, &session);
     if (has_motd) term.print(motd);
     session.push(host_query, user, host.start_dir);
 }
@@ -103,21 +112,25 @@ inline const Host* sshConnect(const std::string& cmd, Session& session, const Wo
                               const std::string& user, Terminal& term) {
     const Host* host = world.findHost(host_query);
     if (!host) {
+        logAuth(session, term, "ssh", user, host_query, port, false);
         term.print(cmd + ": unknown host " + host_query);
         return nullptr;
     }
     if (!host->alive) {
+        logAuth(session, term, "ssh", user, host->name, port, false);
         term.print("No route to host");
         return nullptr;
     }
 
     auto it = host->ports.find(port);
     if (it == host->ports.end()) {
+        logAuth(session, term, "ssh", user, host->name, port, false);
         term.print("Connection refused");
         return nullptr;
     }
     // Порт открыт, но служба не ssh.
     if (it->second.service != "ssh") {
+        logAuth(session, term, "ssh", user, host->name, port, false);
         term.print("ssh_exchange_identification: Connection closed by remote host");
         return nullptr;
     }
@@ -128,7 +141,7 @@ inline const Host* sshConnect(const std::string& cmd, Session& session, const Wo
     term.pause(500);
 
     if (!authenticate(session, *host, port, user,
-                      user + "@" + host->name + "'s password: ", term)) {
+                      user + "@" + host->name + "'s password: ", term, "ssh")) {
         return nullptr;
     }
     return host;

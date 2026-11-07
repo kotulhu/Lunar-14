@@ -12,6 +12,7 @@
 #include "commands/CatCommand.h"
 #include "commands/CdCommand.h"
 #include "commands/ChatCommand.h"
+#include "commands/DownloadsCommand.h"
 #include "commands/ExitCommand.h"
 #include "commands/FmCommand.h"
 #include "commands/HelpCommand.h"
@@ -21,6 +22,7 @@
 #include "commands/PortscanCommand.h"
 #include "commands/PwdCommand.h"
 #include "commands/Registry.h"
+#include "commands/RunCommand.h"
 #include "commands/ScpCommand.h"
 #include "commands/SshCommand.h"
 #include "commands/TelnetCommand.h"
@@ -335,6 +337,8 @@ int main(int argc, char** argv) {
     registry.add(std::make_unique<ChatCommand>());
     registry.add(std::make_unique<BroadcastCommand>(), /*explicitOnly=*/true);
     registry.add(std::make_unique<VisitedCommand>());
+    registry.add(std::make_unique<DownloadsCommand>());
+    registry.add(std::make_unique<RunCommand>());
     registry.add(std::make_unique<ExitCommand>());
 
     printBootSequence(term, *session);
@@ -448,6 +452,7 @@ int main(int argc, char** argv) {
         int mail_before = session->mailbox().unreadCount();
         int chat_before = session->chat().unreadVisible();
         command->execute(*session, world, args, term);
+        if (session->events()) session->events()->onCommand(command_name);
         saveIfNeeded();
 
         if (session->mailbox().unreadCount() > mail_before) {

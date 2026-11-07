@@ -18,10 +18,18 @@
     "when": { "visited": ["old-mailserver", "jsc-archive"] }
   },
   {
+    "id": "file-server",
+    "name": "Файловый сервер",
+    "date": "15 Mar 1999",
+    "when": { "visited": ["old-mailserver", "jsc-archive", "ftp.jsc-files"] }
+  },
+  {
     "id": "relay",
     "name": "Ретранслятор",
     "date": "16 Mar 1999",
-    "when": { "visited": ["old-mailserver", "jsc-archive", "relay-hub"] }
+    "when": {
+      "visited": ["old-mailserver", "jsc-archive", "ftp.jsc-files", "relay-hub"]
+    }
   },
   {
     "id": "final",

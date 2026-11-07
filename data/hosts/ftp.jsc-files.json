@@ -1,0 +1,31 @@
+{
+  "ip": "198.51.100.44",
+  "name": "ftp.jsc-files",
+  "alive": true,
+  "ports": {
+    "21": { "service": "ftp", "banner": "JSC file transfer" },
+    "23": { "service": "telnet", "banner": "JSC-FTP maintenance console" }
+  },
+  "accounts": [["ftpuser", "files1994"]],
+  "start_dir": "/",
+  "reach": 0,
+  "commands": ["ls", "cat", "cd", "pwd"],
+  "fs": {
+    "etc": {},
+    "pub": {
+      "mailsend": {
+        "type": "program",
+        "program_id": "mailsend",
+        "content": "JSC Mail Dispatch Utility. Requires a data file."
+      },
+      "leak.txt": {
+        "type": "data",
+        "content": "Кому это касается.\n\nРетрансляционный узел принимал копии всех сообщений, которые официально считались удалёнными. Архивные записи не уничтожали: их пересылали дальше, чтобы никто не заметил повторяющиеся адреса.\n\nЕсли этот файл дошёл до тебя, передай его целиком. Подписи и даты важны."
+      },
+      "README.txt": {
+        "type": "text",
+        "content": "JSC file archive.\nКлючи к relay-hub — здесь: логин operator, пароль relay.\nСкопируй mailsend и leak.txt в downloads/. Для завершения запусти у себя:\nrun mailsend leak.txt."
+      }
+    }
+  }
+}

@@ -1,40 +1,77 @@
 [
   {
     "id": "newsletter",
-    "when": { "visited": "old-mailserver" },
-    "do": [
+    "conditions": { "visited": ["old-mailserver"] },
+    "actions": [
       { "mail": "newsletter-1" }
-    ]
+    ],
+    "once": true
   },
   {
     "id": "jsc-archive-alert",
-    "when": { "visited": "jsc-archive" },
-    "do": [
+    "conditions": { "visited": ["jsc-archive"] },
+    "actions": [
       { "mail": "threat-1" },
       { "mail": "wolf-letter" },
       { "chat": { "contact": "ghost", "text": "Ты был там. Они уже знают." } },
       { "unlock_contact": "wolf" },
       { "chat": { "contact": "wolf", "text": "Ха! Значит, добрался до архива. Молодец, парень. Только не суйся в бумаги про «Меркурий» — за них увольняют. Или того хуже. Скоро напишу ещё." } }
-    ]
+    ],
+    "once": true
   },
   {
     "id": "bribe",
-    "when": { "visited_count": 2 },
-    "do": [ { "mail": "bribe-1" } ]
+    "conditions": { "visited_count": 2 },
+    "actions": [
+      { "mail": "bribe-1" }
+    ],
+    "once": true
   },
   {
     "id": "bbs-intro",
-    "when": { "visited": "ufo-bbs" },
-    "do": [
+    "conditions": { "visited": ["ufo-bbs"] },
+    "actions": [
       { "unlock_contact": "diona" },
       { "chat": { "contact": "wolf", "text": "Ты на доске. Тише читай: тут пишут все. И те, кого нельзя называть." } }
-    ]
+    ],
+    "once": true
   },
   {
     "id": "last-warning",
-    "when": { "visited": "relay-hub" },
-    "do": [
+    "conditions": { "visited": ["relay-hub"] },
+    "actions": [
       { "mail": "plea-1" }
-    ]
+    ],
+    "once": true
+  },
+  {
+    "id": "agent-ftp-credentials",
+    "conditions": { "visited": ["agent-pc"] },
+    "actions": [
+      { "mail": "ftp-credentials" }
+    ],
+    "once": true
+  },
+  {
+    "id": "ftp-readme-instructions",
+    "conditions": {
+      "visited": ["ftp.jsc-files"],
+      "file_read": ["/pub/README.txt"]
+    },
+    "actions": [
+      { "mail": "ftp-instructions" }
+    ],
+    "once": true
+  },
+  {
+    "id": "ftp-files-ready",
+    "conditions": {
+      "visited": ["ftp.jsc-files"],
+      "downloaded": ["mailsend", "leak.txt"]
+    },
+    "actions": [
+      { "mail": "ftp-ready" }
+    ],
+    "once": true
   }
 ]

@@ -11,8 +11,14 @@
     "home": {
       "hacker": {
         "readme.txt": { "$file": "home/hacker/readme.txt" },
-        ".note.txt": "Поздравляем! Ты догадался набрать ls -a. Мастерство видеть скрытое тебе еще очень пригодится в будущем",
-        "downloads": {}
+        ".note.txt": {
+          "type": "data",
+          "content": "Поздравляем! Ты догадался набрать ls -a. Мастерство видеть скрытое тебе еще очень пригодится в будущем"
+        },
+        ".diagnostic": {
+          "type": "program",
+          "content": "diagnostic utility"
+        }
       }
     }
   }

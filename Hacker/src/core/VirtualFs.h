@@ -7,12 +7,15 @@
 #include <vector>
 
 class Host;
+class Session;
+enum class FileType;
 
 // Виртуальная файловая система: работает поверх дерева узлов хоста.
 class VirtualFs {
 public:
     // Нормализует путь относительно current_dir (поддержка ".", "..", абсолютных путей).
     static std::string normalize(const std::string& current_dir, const std::string& path);
+    static bool isReservedPath(const std::string& path);
 
     // Возвращает отсортированное содержимое каталога (у каталогов в конце "/").
     // Скрытые имена (начинающиеся с ".") включаются только при show_hidden.
@@ -21,9 +24,12 @@ public:
 
     static bool exists(const Host& host, const std::string& path);
     static bool isDirectory(const Host& host, const std::string& path);
+    static FileType typeOf(const Host& host, const std::string& path);
+    static std::string programIdOf(const Host& host, const std::string& path);
 
     // Читает файл. ok=false, если путь не является файлом.
-    static std::string readFile(const Host& host, const std::string& path, bool& ok);
+    static std::string readFile(const Host& host, const std::string& path, bool& ok,
+                                Session* session = nullptr);
 
     // Создаёт или перезаписывает файл. false, если родительский каталог не найден,
     // путь занят каталогом или системным файлом. Изменение ложится в слой
@@ -37,9 +43,11 @@ public:
     // Сбрасывает слой пользовательских изменений (новая игра).
     static void clearChanges();
 
-    // Добавляет сгенерированный (системный) файл: текст возвращает функция.
+    // Добавляет сгенерированный (системный) файл: текст возвращает функция
+    // в момент чтения (session может быть nullptr). Недостающие каталоги
+    // по пути создаются.
     static bool addGeneratedFile(Host& host, const std::string& path,
-                                 std::function<std::string()> generate);
+                                 std::function<std::string(Session*)> generate);
 
     // true, если путь — сгенерированный (системный) файл.
     static bool isSystemFile(const Host& host, const std::string& path);

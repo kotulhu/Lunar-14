@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -9,19 +10,13 @@
 #include "core/Credits.h"
 #include "core/GameState.h"
 #include "core/Host.h"
+#include "core/LocalStorage.h"
 #include "core/Mailbox.h"
 #include "core/Quest.h"
 #include "core/ResponseProvider.h"
 
 class World;
 class EventEngine;
-
-// Запись о скачанном файле (пока не показывается, нужна для будущих очков и улик).
-struct Download {
-    std::string host;    // имя хоста-источника
-    std::string remote;  // удалённый путь
-    std::string local;   // локальный путь
-};
 
 // Состояние игрока: стек открытых сессий (нижняя — стартовая, верхняя — текущая).
 class Session {
@@ -60,8 +55,16 @@ public:
     bool pop();
     std::size_t depth() const { return stack_.size(); }
 
-    void addDownload(const Download& record) { downloads_.push_back(record); }
-    const std::vector<Download>& downloads() const { return downloads_; }
+    LocalStorage& localStorage() { return local_storage_; }
+    const LocalStorage& localStorage() const { return local_storage_; }
+
+    // Локальная папка downloads на домашнем хосте. Физически файлы лежат
+    // в LocalStorage, а ФС показывает их как каталог ~/downloads.
+    std::string localDownloadsDir() const;
+    bool isLocalDownloadsDir(const std::string& path) const;
+    bool isLocalDownloadsParent(const std::string& path) const;
+    bool isInLocalDownloads(const std::string& path) const;
+    std::vector<std::string> listLocalDownloads(bool show_hidden) const;
 
     // Почтовый ящик игрока — один на запуск.
     Mailbox& mailbox() { return mailbox_; }
@@ -96,6 +99,23 @@ public:
     // Текущий этап квеста по состоянию игры. nullptr, если этапов нет.
     const QuestStage* currentStage() const;
 
+    // Момент создания сессии (для /proc/uptime).
+    std::chrono::steady_clock::time_point startedAt() const { return started_at_; }
+
+    // Запись telnet/ssh-попытки (в том числе неудачной) для /var/log/auth.log.
+    struct ConnectionAttempt {
+        std::string time;
+        std::string service;
+        std::string user;
+        std::string target;
+        int port = 0;
+        bool ok = false;
+    };
+    void logConnection(const std::string& time, const std::string& service,
+                       const std::string& user, const std::string& target, int port,
+                       bool ok);
+    const std::vector<ConnectionAttempt>& connectionLog() const { return connection_log_; }
+
 private:
     struct Frame {
         Host* host = nullptr;
@@ -107,7 +127,7 @@ private:
 
     World* world_ = nullptr;
     std::vector<Frame> stack_;
-    std::vector<Download> downloads_;
+    LocalStorage local_storage_;
     Mailbox mailbox_;
     ChatStore chat_;
     GameState game_state_;
@@ -115,5 +135,7 @@ private:
     std::unique_ptr<ResponseProvider> chat_provider_;
     std::unique_ptr<EventEngine> event_engine_;
     std::unique_ptr<Quest> quest_;
+    std::chrono::steady_clock::time_point started_at_;
+    std::vector<ConnectionAttempt> connection_log_;
     bool quit_ = false;
 };

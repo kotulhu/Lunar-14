@@ -8,11 +8,9 @@
   "accounts": [["guest", "Houston1969"]],
   "start_dir": "/",
   "reach": 120,
-  "commands": ["ls", "cat"],
+  "commands": ["ls", "cat", "cd", "pwd"],
   "fs": {
-    "etc": {
-      "motd": "ufo-bbs. Входа нет, только чтение. Не пишите — пишите им."
-    },
+    "etc": {},
     "readme.txt": "Доска объявлений. Объявления лежат в posts/, по номерам. Старые стирают, но не все.",
     "posts": {
       "0001.txt": { "$file": "board/0001.txt" },

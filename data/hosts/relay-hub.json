@@ -10,6 +10,6 @@
   "reach": 5000,
   "commands": ["ls", "cat", "cd", "pwd", "broadcast"],
   "fs": {
-    "readme.txt": "Ретранслятор. Для рассылки введите broadcast."
+    "readme.txt": "Ретранслятор. Загрузите payload командой run mailsend leak.txt, затем введите broadcast. Локальный запуск mailsend тоже завершает игру."
   }
 }

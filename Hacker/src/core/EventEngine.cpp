@@ -1,6 +1,7 @@
 #include "core/EventEngine.h"
 
 #include <algorithm>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -119,6 +120,10 @@ bool EventEngine::load(const std::string& data_dir, const World& world,
                        const ChatStore& chat, std::string& error) {
     templates_.clear();
     rules_.clear();
+    read_files_.clear();
+    downloaded_.clear();
+    read_mail_.clear();
+    commands_.clear();
     player_host_ = world.playerHost();
 
     namespace fs = std::filesystem;
@@ -171,9 +176,17 @@ bool EventEngine::load(const std::string& data_dir, const World& world,
         error = "cannot open file: " + events_path;
         return false;
     }
+    std::string events_text((std::istreambuf_iterator<char>(ein)),
+                            std::istreambuf_iterator<char>());
+    return loadRulesJson(events_text, world, chat, error);
+}
+
+bool EventEngine::loadRulesJson(const std::string& text, const World& world,
+                                const ChatStore& chat, std::string& error) {
+    rules_.clear();
     json root;
     try {
-        ein >> root;
+        root = json::parse(text);
     } catch (const std::exception& e) {
         error = std::string("events.json: invalid JSON: ") + e.what();
         return false;
@@ -207,44 +220,72 @@ bool EventEngine::load(const std::string& data_dir, const World& world,
             return false;
         }
 
-        if (node.contains("when")) {
-            const json& when = node["when"];
-            if (!when.is_object()) {
-                error = where + "'when' must be an object";
+        // Поддерживаем и новый формат ("conditions"), и старый ("when").
+        const char* conditions_key = nullptr;
+        if (node.contains("conditions")) conditions_key = "conditions";
+        else if (node.contains("when")) conditions_key = "when";
+        if (conditions_key) {
+            const json& conditions = node[conditions_key];
+            if (!conditions.is_object()) {
+                error = where + "'" + conditions_key + "' must be an object";
                 return false;
             }
-            if (when.contains("visited")) {
-                const json& visited = when["visited"];
+            // visited: строка или массив строк (совместимость со старым форматом).
+            if (conditions.contains("visited")) {
+                const json& visited = conditions["visited"];
                 if (visited.is_string()) {
                     rule.visited.push_back(visited.get<std::string>());
                 } else if (visited.is_array()) {
                     for (const json& item : visited) {
                         if (!item.is_string()) {
-                            error = where + "'when.visited' array must contain only strings";
+                            error = where + "'" + conditions_key + ".visited' must contain only strings";
                             return false;
                         }
                         rule.visited.push_back(item.get<std::string>());
                     }
                 } else {
-                    error = where + "'when.visited' must be a string or an array of strings";
+                    error = where + "'" + conditions_key + ".visited' must be a string or an array of strings";
                     return false;
                 }
                 for (const std::string& host_name : rule.visited) {
                     if (!world.findHost(host_name)) {
-                        error = where + "unknown host '" + host_name + "' in when.visited";
+                        error = where + "unknown host '" + host_name + "' in " +
+                                conditions_key + ".visited";
                         return false;
                     }
                 }
             }
-            if (when.contains("visited_count")) {
-                const json& count = when["visited_count"];
+            auto readStringArray = [&](const char* key, std::vector<std::string>& out) -> bool {
+                if (!conditions.contains(key)) return true;
+                const json& value = conditions[key];
+                if (!value.is_array()) {
+                    error = where + "'" + conditions_key + "." + key +
+                            "' must be an array of strings";
+                    return false;
+                }
+                for (const json& item : value) {
+                    if (!item.is_string()) {
+                        error = where + "'" + conditions_key + "." + key +
+                                "' must contain only strings";
+                        return false;
+                    }
+                    out.push_back(item.get<std::string>());
+                }
+                return true;
+            };
+            if (!readStringArray("downloaded", rule.downloaded) ||
+                !readStringArray("file_read", rule.file_read) ||
+                !readStringArray("mail_read", rule.mail_read) ||
+                !readStringArray("command", rule.command)) return false;
+            if (conditions.contains("visited_count")) {
+                const json& count = conditions["visited_count"];
                 if (!count.is_number_integer()) {
-                    error = where + "'when.visited_count' must be an integer";
+                    error = where + "'" + conditions_key + ".visited_count' must be an integer";
                     return false;
                 }
                 int n = count.get<int>();
                 if (n < 0) {
-                    error = where + "'when.visited_count' must not be negative";
+                    error = where + "'" + conditions_key + ".visited_count' must not be negative";
                     return false;
                 }
                 rule.visited_count = n;
@@ -259,11 +300,15 @@ bool EventEngine::load(const std::string& data_dir, const World& world,
             rule.once = node["once"].get<bool>();
         }
 
-        if (!node.contains("do") || !node["do"].is_array() || node["do"].empty()) {
-            error = where + "'do' must be a non-empty array";
+        // Поддерживаем и новый формат ("actions"), и старый ("do").
+        const char* actions_key = nullptr;
+        if (node.contains("actions")) actions_key = "actions";
+        else if (node.contains("do")) actions_key = "do";
+        if (!actions_key || !node[actions_key].is_array() || node[actions_key].empty()) {
+            error = where + "'actions' must be a non-empty array";
             return false;
         }
-        for (const json& item : node["do"]) {
+        for (const json& item : node[actions_key]) {
             if (!item.is_object() || item.empty() || item.size() != 1) {
                 error = where + "each action must be an object with exactly one key";
                 return false;
@@ -338,16 +383,42 @@ bool EventEngine::matches(const Rule& rule, const Session& session) const {
         session.gameState().distinctHosts(player_host_) < rule.visited_count) {
         return false;
     }
+    auto hasAll = [](const std::vector<std::string>& values,
+                     const std::set<std::string>& observed) {
+        return std::all_of(values.begin(), values.end(), [&](const std::string& value) {
+            return observed.find(value) != observed.end();
+        });
+    };
+    if (!hasAll(rule.downloaded, downloaded_) || !hasAll(rule.file_read, read_files_) ||
+        !hasAll(rule.mail_read, read_mail_) || !hasAll(rule.command, commands_)) return false;
     return true;
 }
 
-void EventEngine::fire(const Event& event, Session& session,
-                       const std::function<std::string()>& now_hm) {
-    if (event.type != "login") return;  // пока других типов событий нет
+void EventEngine::onSignal(Session& session, World&, Signal signal,
+                           const SignalData& data) {
+    switch (signal) {
+        case Signal::FileRead: read_files_.insert(data.path); break;
+        case Signal::Download: downloaded_.insert(data.name); break;
+        case Signal::MailRead: read_mail_.insert(data.name); break;
+        case Signal::Command: commands_.insert(data.name); break;
+        case Signal::Login: break;
+    }
+    fireMatching(session, data);
+}
 
-    const std::string& last_host = event.host;
+void EventEngine::fireMatching(Session& session, const SignalData& data) {
+    const std::string& last_host = data.host;
     int visited_count = session.gameState().distinctHosts(player_host_);
     const std::string player_user = session.localUser();
+    std::time_t now = std::time(nullptr);
+    std::tm local{};
+#ifdef _WIN32
+    localtime_s(&local, &now);
+#else
+    localtime_r(&now, &local);
+#endif
+    char time_buffer[6] = {};
+    std::strftime(time_buffer, sizeof(time_buffer), "%H:%M", &local);
 
     for (const Rule& rule : rules_) {
         if (rule.once && session.gameState().eventFired(rule.id)) continue;
@@ -362,6 +433,7 @@ void EventEngine::fire(const Event& event, Session& session,
                 message.subject =
                     substitute(t->subject, last_host, visited_count, player_user);
                 message.date = t->date;
+                message.trigger = t->id;
                 std::uniform_int_distribution<std::size_t> dist(0, t->variants.size() - 1);
                 for (const std::string& line : t->variants[dist(rng_)]) {
                     message.body.push_back(
@@ -370,7 +442,7 @@ void EventEngine::fire(const Event& event, Session& session,
                 session.mailbox().add(std::move(message));
             } else if (action.kind == Action::Kind::Chat) {
                 session.chat().add(action.id, ChatMessage{action.id, action.message,
-                                                          now_hm()});
+                                                          time_buffer});
             } else {  // UnlockContact
                 session.chat().unlock(action.id);
             }
@@ -378,4 +450,24 @@ void EventEngine::fire(const Event& event, Session& session,
 
         if (rule.once) session.gameState().markEventFired(rule.id);
     }
+}
+
+void EventEngine::onLogin(const std::string& host) {
+    if (session_) onSignal(*session_, session_->world(), Signal::Login, {host, {}, {}});
+}
+
+void EventEngine::onFileRead(const std::string& host, const std::string& path) {
+    if (session_) onSignal(*session_, session_->world(), Signal::FileRead, {host, path, {}});
+}
+
+void EventEngine::onDownload(const std::string& name) {
+    if (session_) onSignal(*session_, session_->world(), Signal::Download, {{}, {}, name});
+}
+
+void EventEngine::onMailRead(const std::string& mailId) {
+    if (session_) onSignal(*session_, session_->world(), Signal::MailRead, {{}, {}, mailId});
+}
+
+void EventEngine::onCommand(const std::string& cmd) {
+    if (session_) onSignal(*session_, session_->world(), Signal::Command, {{}, {}, cmd});
 }

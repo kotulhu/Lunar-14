@@ -13,6 +13,16 @@ void CdCommand::execute(Session& session, const World&,
     std::string full = VirtualFs::normalize(session.currentDir(), target);
     const Host& host = session.host();
 
+    // downloads/ существует только на домашнем хосте и только виртуально.
+    if (session.isLocalDownloadsDir(full)) {
+        session.setCurrentDir(full);
+        return;
+    }
+    if (session.isInLocalDownloads(full)) {
+        term.print("cd: " + target + ": Not a directory");
+        return;
+    }
+
     if (!VirtualFs::exists(host, full)) {
         term.print("cd: " + target + ": No such file or directory");
         return;

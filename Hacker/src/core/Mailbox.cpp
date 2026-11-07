@@ -4,6 +4,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include "core/EventEngine.h"
+#include "core/Session.h"
+
 using json = nlohmann::json;
 
 namespace {
@@ -141,6 +144,18 @@ void Mailbox::clear() {
 bool Mailbox::markRead(std::size_t index) {
     if (index >= messages_.size()) return false;
     messages_[index].read = true;
+    return true;
+}
+
+bool Mailbox::open(std::size_t index, Session& session) {
+    if (index >= messages_.size()) return false;
+    messages_[index].read = true;
+    if (session.events()) {
+        const Message& message = messages_[index];
+        session.events()->onMailRead(message.trigger.empty()
+                                         ? std::to_string(message.id)
+                                         : message.trigger);
+    }
     return true;
 }
 

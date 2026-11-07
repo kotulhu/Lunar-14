@@ -24,22 +24,26 @@ void TelnetCommand::execute(Session& session, const World& world,
     const std::string& target = args[0];
     const Host* host = world.findHost(target);
     if (!host) {
+        logAuth(session, term, "telnet", "", target, port, false);
         term.print("telnet: unknown host " + target);
         return;
     }
     if (!host->alive) {
+        logAuth(session, term, "telnet", "", host->name, port, false);
         term.print("No route to host");
         return;
     }
 
     auto it = host->ports.find(port);
     if (it == host->ports.end()) {
+        logAuth(session, term, "telnet", "", host->name, port, false);
         term.print("Connection refused");
         return;
     }
 
     // Порт открыт, но служба не telnet: показываем баннер и закрываемся.
     if (it->second.service != "telnet") {
+        logAuth(session, term, "telnet", "", host->name, port, false);
         term.print(it->second.banner.empty() ? it->second.service : it->second.banner);
         term.print("Connection closed by foreign host.");
         return;
@@ -60,7 +64,7 @@ void TelnetCommand::execute(Session& session, const World& world,
         return;
     }
 
-    if (!authenticate(session, *host, port, login, "Password: ", term)) return;
+    if (!authenticate(session, *host, port, login, "Password: ", term, "telnet")) return;
     noteVisit(session, host->name, port, login);
     enterShell(session, target, login, *host, term);
 }

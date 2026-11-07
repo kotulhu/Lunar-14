@@ -65,12 +65,17 @@ public:
     bool finished() const { return finished_; }
     void setFinished(bool value) { finished_ = value; }
 
+    // Загружен ли data-файл на ретранслятор программой mailsend.
+    bool payloadReady() const { return payload_ready_; }
+    void setPayloadReady(bool value) { payload_ready_ = value; }
+
     // Очищает список (перед загрузкой сохранения).
     void clear() {
         entries_.clear();
         journal_.clear();
         fired_events_.clear();
         finished_ = false;
+        payload_ready_ = false;
     }
 
 private:
@@ -78,4 +83,5 @@ private:
     std::vector<JournalEntry> journal_;
     std::vector<std::string> fired_events_;
     bool finished_ = false;
+    bool payload_ready_ = false;
 };

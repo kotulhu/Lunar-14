@@ -19,7 +19,11 @@ public:
     const std::string& playerHost() const { return player_host_; }
     const std::vector<Host>& hosts() const { return hosts_; }
 
+    // Папка данных, из которой загружен мир (нужна программам вроде mailsend).
+    const std::string& dataDir() const { return data_dir_; }
+
 private:
     std::string player_host_;
+    std::string data_dir_;
     std::vector<Host> hosts_;
 };

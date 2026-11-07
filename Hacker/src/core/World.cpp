@@ -1,12 +1,21 @@
 #include "core/World.h"
 
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <functional>
+#include <iomanip>
 #include <iterator>
+#include <random>
 #include <set>
+#include <sstream>
 
 #include <nlohmann/json.hpp>
+
+#include "core/LocalStorage.h"
+#include "core/Session.h"
+#include "core/VirtualFs.h"
 
 using json = nlohmann::json;
 
@@ -72,6 +81,49 @@ bool parseFsNode(const json& node, const std::string& host_name, const std::stri
                             std::istreambuf_iterator<char>());
             out.is_dir = false;
             out.content = cleanText(raw);
+            return true;
+        }
+
+        // Типизированный файл: {"type": "program", "program_id": "...", "content": "..."}.
+        if (node.contains("content") || node.contains("type")) {
+            bool extra_key = false;
+            for (auto it = node.begin(); it != node.end(); ++it) {
+                if (it.key() != "content" && it.key() != "type" &&
+                    it.key() != "program_id") extra_key = true;
+            }
+            if (!node.contains("content") || extra_key ||
+                (node.contains("type") &&
+                 (!node["type"].is_string() ||
+                  !parseFileTypeName(node["type"].get<std::string>(), out.type)))) {
+                error = where + "typed file must contain 'content' and a valid optional 'type'";
+                return false;
+            }
+            if (node.contains("program_id")) {
+                if (!node["program_id"].is_string() ||
+                    node["program_id"].get<std::string>().empty() ||
+                    out.type != FileType::Program) {
+                    error = where + "'program_id' must be a non-empty string on a program file";
+                    return false;
+                }
+                out.program_id = node["program_id"].get<std::string>();
+            }
+            const json& content = node["content"];
+            if (content.is_string()) {
+                out.content = content.get<std::string>();
+            } else if (content.is_array()) {
+                for (std::size_t i = 0; i < content.size(); ++i) {
+                    if (!content[i].is_string()) {
+                        error = where + "typed file 'content' array must contain only strings";
+                        return false;
+                    }
+                    if (i) out.content += "\n";
+                    out.content += content[i].get<std::string>();
+                }
+            } else {
+                error = where + "typed file 'content' must be a string or array of strings";
+                return false;
+            }
+            out.is_dir = false;
             return true;
         }
 
@@ -268,6 +320,64 @@ bool parseHost(const json& h, const std::string& filename, const std::string& te
     return true;
 }
 
+bool addGenerated(World& world, const char* host_name, const char* path,
+                  std::function<std::string(Session*)> generate, std::string& error) {
+    Host* host = world.findHost(host_name);
+    if (!host) {
+        error = std::string("generated file: host '") + host_name + "' not found";
+        return false;
+    }
+    if (!VirtualFs::addGeneratedFile(*host, path, std::move(generate))) {
+        error = std::string("host '") + host_name + "': cannot initialize generated " + path;
+        return false;
+    }
+    return true;
+}
+
+std::string formatAuthLog(Session* session) {
+    if (!session || session->connectionLog().empty()) {
+        return "# /var/log/auth.log";
+    }
+    std::string out;
+    for (const auto& attempt : session->connectionLog()) {
+        if (!out.empty()) out += "\n";
+        out += attempt.time + " " + attempt.service + " ";
+        if (!attempt.user.empty()) out += attempt.user + "@";
+        out += attempt.target;
+        if (attempt.port > 0) out += ":" + std::to_string(attempt.port);
+        out += attempt.ok ? " accepted" : " failed";
+    }
+    return out;
+}
+
+std::string formatUptime(Session* session) {
+    double seconds = 0.0;
+    if (session) {
+        using clock = std::chrono::steady_clock;
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                      clock::now() - session->startedAt())
+                      .count();
+        seconds = static_cast<double>(ms) / 1000.0;
+    }
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(2) << seconds << " 0.00";
+    return out.str();
+}
+
+const char* ufoQuote() {
+    static const char* quotes[] = {
+        "The truth is out there. The disk space is not.",
+        "I want to believe. I also want a faster modem.",
+        "Trust no one. Especially not root.",
+        "This BBS has been expecting you.",
+        "We are not alone. Check /posts.",
+        "Houston, we have a login.",
+    };
+    static thread_local std::mt19937 rng{std::random_device{}()};
+    std::uniform_int_distribution<int> dist(0, 5);
+    return quotes[dist(rng)];
+}
+
 }  // namespace
 
 bool World::load(const std::string& data_dir_in, std::string& error) {
@@ -275,6 +385,7 @@ bool World::load(const std::string& data_dir_in, std::string& error) {
     while (data_dir.size() > 1 && data_dir.back() == '/') data_dir.pop_back();
 
     player_host_.clear();
+    data_dir_ = data_dir;
     hosts_.clear();
 
     // world.json — имя домашнего хоста игрока.
@@ -340,6 +451,10 @@ bool World::load(const std::string& data_dir_in, std::string& error) {
         std::string stem = fs::path(file).stem().string();
         Host host;
         if (!parseHost(root, file, texts_dir, host, error)) return false;
+        if (host.name == "downloads") {
+            error = "host name 'downloads' is reserved for local storage";
+            return false;
+        }
         if (host.name != stem) {
             error = "host file '" + file + "': name '" + host.name +
                     "' does not match file name '" + stem + "'";
@@ -363,6 +478,37 @@ bool World::load(const std::string& data_dir_in, std::string& error) {
 
     if (findHost(player_host_) == nullptr) {
         error = "player_host '" + player_host_ + "' not found among hosts";
+        return false;
+    }
+
+    if (!addGenerated(*this, "home-pc", "/var/log/auth.log",
+                      [](Session* s) { return formatAuthLog(s); }, error)) {
+        return false;
+    }
+    if (!addGenerated(*this, "home-pc", "/home/hacker/.bash_history",
+                      [](Session*) {
+                          return std::string(
+                              "ls -la\n"
+                              "cat readme.txt\n"
+                              "sudo rm -rf /\n"
+                              "# не смейся, я один раз нажал\n"
+                              "ping 127.0.0.1\n"
+                              "telnet 203.0.113.5");
+                      },
+                      error)) {
+        return false;
+    }
+    if (!addGenerated(*this, "ftp.jsc-files", "/etc/motd",
+                      [](Session*) { return std::string("Welcome to JSC-FTP, since 1994"); },
+                      error)) {
+        return false;
+    }
+    if (!addGenerated(*this, "relay-hub", "/proc/uptime",
+                      [](Session* s) { return formatUptime(s); }, error)) {
+        return false;
+    }
+    if (!addGenerated(*this, "ufo-bbs", "/etc/motd",
+                      [](Session*) { return std::string(ufoQuote()); }, error)) {
         return false;
     }
 

@@ -1,12 +1,17 @@
 #include "commands/BroadcastCommand.h"
 
-#include "core/EventEngine.h"
 #include "core/Session.h"
 #include "core/World.h"
 #include "ui/Terminal.h"
 
 void BroadcastCommand::execute(Session& session, const World& world,
                                const std::vector<std::string>&, Terminal& term) {
+    if (!session.gameState().payloadReady()) {
+        term.print("broadcast: no payload staged");
+        term.print("Run 'run mailsend leak.txt' on this relay first.");
+        return;
+    }
+
     const Credits& credits = session.credits();
 
     term.print("Broadcast started.");
@@ -26,9 +31,4 @@ void BroadcastCommand::execute(Session& session, const World& world,
     session.gameState().setFinished(true);
     term.print("THE END");
 
-    // Задел на будущее: событие о завершении рассылки.
-    if (EventEngine* engine = session.events()) {
-        engine->fire({"broadcast", session.hostName()}, session,
-                     [&term] { return term.localTimeHM(); });
-    }
 }

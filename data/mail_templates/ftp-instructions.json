@@ -1,0 +1,17 @@
+[
+  {
+    "id": "ftp-instructions",
+    "from": "Ghost <ghost@proxy.local>",
+    "subject": "Что взять с JSC Files",
+    "date": "16 Mar 1999 03:12",
+    "variants": [
+      [
+        "Теперь ты на файловом сервере. Прочитай /pub/README.txt.",
+        "Скопируй /pub/mailsend и /pub/leak.txt в downloads/.",
+        "Программа отправит data-файл дальше, не меняя его содержимое.",
+        "Запускай её локально: run mailsend leak.txt. Ретранслятор — запасной путь.",
+        "Ключи к relay-hub здесь."
+      ]
+    ]
+  }
+]

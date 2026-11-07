@@ -241,7 +241,7 @@ private:
 
     void openSelected() {
         if (selected_ < 0 || selected_ >= count()) return;
-        session_.mailbox().markRead(selected_);  // открытие помечает письмо прочитанным
+        session_.mailbox().open(selected_, session_);
         const Message& message = messages()[selected_];
         std::string text = message.from + " " + message.subject;
         for (const std::string& line : message.body) text += " " + line;

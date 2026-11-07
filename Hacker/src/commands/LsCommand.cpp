@@ -1,5 +1,6 @@
 #include "commands/LsCommand.h"
 
+#include <algorithm>
 #include <string>
 
 #include "core/Session.h"
@@ -33,12 +34,31 @@ void LsCommand::execute(Session& session, const World&,
     std::string full = VirtualFs::normalize(session.currentDir(), path);
     const Host& host = session.host();
 
+    // downloads/ — синтетический локальный каталог поверх LocalStorage.
+    if (session.isLocalDownloadsDir(full)) {
+        std::vector<std::string> entries = session.listLocalDownloads(show_hidden);
+        if (entries.empty()) return;
+        std::string line;
+        for (std::size_t i = 0; i < entries.size(); ++i) {
+            line += entries[i];
+            if (i + 1 < entries.size()) line += "  ";
+        }
+        term.print(line);
+        return;
+    }
+
     if (!VirtualFs::exists(host, full) || !VirtualFs::isDirectory(host, full)) {
         term.print("ls: " + path + ": No such file or directory");
         return;
     }
 
     std::vector<std::string> entries = VirtualFs::list(host, full, show_hidden);
+    if (session.isLocalDownloadsParent(full)) {
+        if (std::find(entries.begin(), entries.end(), "downloads/") == entries.end()) {
+            entries.push_back("downloads/");
+            std::sort(entries.begin(), entries.end());
+        }
+    }
     if (entries.empty()) {
         return;  // пустой каталог
     }

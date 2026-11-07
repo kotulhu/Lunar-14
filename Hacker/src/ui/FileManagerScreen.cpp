@@ -45,7 +45,8 @@ bool isRootDir(const std::string& dir) {
 }
 
 // Перечитывает каталог: "..", затем каталоги, затем файлы, по алфавиту.
-void refreshPanel(const Host& host, Panel& panel, bool show_hidden) {
+void refreshPanel(Session& session, Panel& panel, bool show_hidden) {
+    const Host& host = session.currentHost();
     std::vector<Entry> dirs;
     std::vector<Entry> files;
     for (const std::string& raw : VirtualFs::list(host, panel.dir, show_hidden)) {
@@ -59,6 +60,27 @@ void refreshPanel(const Host& host, Panel& panel, bool show_hidden) {
             files.push_back(entry);
         }
     }
+
+    // downloads/ — виртуальный каталог поверх LocalStorage.
+    if (session.isLocalDownloadsDir(panel.dir)) {
+        for (const std::string& name : session.listLocalDownloads(show_hidden)) {
+            Entry entry;
+            entry.name = name;
+            files.push_back(entry);
+        }
+    } else if (session.isLocalDownloadsParent(panel.dir)) {
+        bool present = false;
+        for (const Entry& entry : dirs) {
+            if (entry.name == "downloads") present = true;
+        }
+        if (!present) {
+            Entry entry;
+            entry.name = "downloads";
+            entry.is_dir = true;
+            dirs.push_back(entry);
+        }
+    }
+
     auto by_name = [](const Entry& a, const Entry& b) { return a.name < b.name; };
     std::sort(dirs.begin(), dirs.end(), by_name);
     std::sort(files.begin(), files.end(), by_name);
@@ -298,16 +320,27 @@ private:
             refresh();
             return;
         }
+        const std::string full = joinPath(panel.dir, entry.name);
         if (entry.is_dir) {
-            panel.dir = joinPath(panel.dir, entry.name);
+            panel.dir = full;
             panel.selected = 0;
             refresh();
             return;
         }
 
         bool ok = false;
-        std::string content =
-            VirtualFs::readFile(session_.currentHost(), joinPath(panel.dir, entry.name), ok);
+        std::string content;
+        if (session_.isInLocalDownloads(full)) {
+            const DownloadedFile* file = session_.localStorage().get(entry.name);
+            if (!file) {
+                status_ = "Cannot open file";
+                return;
+            }
+            content = file->content;
+            ok = true;
+        } else {
+            content = VirtualFs::readFile(session_.currentHost(), full, ok, &session_);
+        }
         if (!ok) {
             status_ = "Cannot open file";
             return;
@@ -327,21 +360,55 @@ private:
             return;
         }
 
-        Host& host = session_.currentHost();
+        const std::string source_path = joinPath(source.dir, entry.name);
         bool ok = false;
-        std::string content =
-            VirtualFs::readFile(host, joinPath(source.dir, entry.name), ok);
-        if (!ok) {
-            status_ = "Cannot copy file";
+        std::string content;
+        FileType type = FileType::Text;
+        std::string program_id;
+        std::string source_host = session_.hostName();
+        std::string source_file_path = source_path;
+
+        if (session_.isInLocalDownloads(source_path)) {
+            const DownloadedFile* file = session_.localStorage().get(entry.name);
+            if (!file) {
+                status_ = "Cannot copy file";
+                return;
+            }
+            content = file->content;
+            type = file->type;
+            program_id = file->programId;
+            source_host = file->sourceHost;
+            source_file_path = file->sourcePath;
+        } else {
+            Host& host = session_.currentHost();
+            content = VirtualFs::readFile(host, source_path, ok, &session_);
+            if (!ok) {
+                status_ = "Cannot copy file";
+                return;
+            }
+            type = VirtualFs::typeOf(host, source_path);
+            program_id = VirtualFs::programIdOf(host, source_path);
+        }
+
+        const std::string dest_dir = panels_[1 - active_].dir;
+        const std::string dest_path = joinPath(dest_dir, entry.name);
+
+        // Копирование в downloads/ идёт в LocalStorage, а не в ФС хоста.
+        if (session_.isLocalDownloadsDir(dest_dir)) {
+            const bool existed = session_.localStorage().has(entry.name);
+            session_.localStorage().add(
+                {entry.name, type, content, source_host, source_file_path, program_id});
+            status_ = existed ? "Overwritten" : ("Copied " + entry.name);
+            refresh();
             return;
         }
 
-        std::string dest_path = joinPath(panels_[1 - active_].dir, entry.name);
+        Host& host = session_.currentHost();
         if (VirtualFs::isSystemFile(host, dest_path)) {
             status_ = "Cannot overwrite system file";
             return;
         }
-        bool existed = VirtualFs::exists(host, dest_path);
+        const bool existed = VirtualFs::exists(host, dest_path);
         if (!VirtualFs::writeFile(host, dest_path, content)) {
             status_ = "Cannot copy file";
             return;
@@ -351,9 +418,8 @@ private:
     }
 
     void refresh() {
-        Host& host = session_.currentHost();
-        refreshPanel(host, panels_[0], show_hidden_);
-        refreshPanel(host, panels_[1], show_hidden_);
+        refreshPanel(session_, panels_[0], show_hidden_);
+        refreshPanel(session_, panels_[1], show_hidden_);
     }
 
     Session& session_;

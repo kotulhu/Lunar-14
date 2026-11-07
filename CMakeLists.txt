@@ -13,7 +13,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
-# FTXUI (TUI) — используется только в src/ui/.
+# FTXUI (TUI) — используется в ui/ и в тестовом приложении.
 FetchContent_Declare(
     ftxui
     GIT_REPOSITORY https://github.com/ArthurSonzogni/FTXUI.git
@@ -21,12 +21,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(ftxui)
 
-add_executable(hacker
-    Hacker/src/main.cpp
+# ── Статическая библиотека: core + commands + ui ──────────────────────────────
+# hacker-bin и hacker-tester линкуются с ней; main.cpp в неё не входит.
+add_library(hacker-core STATIC
     Hacker/src/core/World.cpp
     Hacker/src/core/Session.cpp
     Hacker/src/core/GameState.cpp
     Hacker/src/core/VirtualFs.cpp
+    Hacker/src/core/LocalStorage.cpp
     Hacker/src/core/Mailbox.cpp
     Hacker/src/core/ChatStore.cpp
     Hacker/src/core/EventEngine.cpp
@@ -54,6 +56,8 @@ add_executable(hacker
     Hacker/src/commands/ChatCommand.cpp
     Hacker/src/commands/BroadcastCommand.cpp
     Hacker/src/commands/VisitedCommand.cpp
+    Hacker/src/commands/DownloadsCommand.cpp
+    Hacker/src/commands/RunCommand.cpp
     Hacker/src/commands/ExitCommand.cpp
     Hacker/src/ui/Terminal.cpp
     Hacker/src/ui/SaveDir.cpp
@@ -62,14 +66,44 @@ add_executable(hacker
     Hacker/src/ui/MailScreen.cpp
     Hacker/src/ui/ChatScreen.cpp
 )
+target_include_directories(hacker-core PUBLIC Hacker/src)
+target_link_libraries(hacker-core PUBLIC nlohmann_json::nlohmann_json ftxui::component)
 
-# Все include-пути проекта указываются от папки src.
-target_include_directories(hacker PRIVATE Hacker/src)
-target_link_libraries(hacker PRIVATE nlohmann_json::nlohmann_json ftxui::component)
+# ── Основной бинарь ───────────────────────────────────────────────────────────
+add_executable(hacker Hacker/src/main.cpp)
+target_link_libraries(hacker PRIVATE hacker-core)
 
-# Копируем папку data рядом с исполняемым файлом после сборки.
 add_custom_command(TARGET hacker POST_BUILD
+    # Удобный бинарь в корне проекта не должен отставать от build/hacker:
+    # иначе игрок запускает старую сборку и не видит новых изменений.
+    COMMAND ${CMAKE_COMMAND} -E copy
+        $<TARGET_FILE:hacker>
+        ${CMAKE_CURRENT_SOURCE_DIR}/hacker-bin${CMAKE_EXECUTABLE_SUFFIX}
+)
+
+# ── Тестовый бинарь ───────────────────────────────────────────────────────────
+# Собирается всегда (не опция — он лёгкий).
+add_executable(hacker-tester
+    tests/main.cpp
+    tests/registry.cpp
+    tests/test_vfs.cpp
+    tests/test_savegame.cpp
+    tests/test_events.cpp
+    tests/test_file_types.cpp
+    tests/test_scp.cpp
+    tests/test_run.cpp
+    tests/test_generated.cpp
+)
+target_include_directories(hacker-tester PRIVATE tests)
+target_link_libraries(hacker-tester PRIVATE hacker-core)
+
+# Один общий шаг копирования data/: иначе post-build команды двух целей
+# одновременно пишут в build/data и иногда мешают друг другу.
+add_custom_target(copy-data
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_CURRENT_SOURCE_DIR}/data
-        $<TARGET_FILE_DIR:hacker>/data
+        ${CMAKE_BINARY_DIR}/data
+    COMMENT "Copying data/ to build/"
 )
+add_dependencies(hacker copy-data)
+add_dependencies(hacker-tester copy-data)

@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+class Session;
+
 // Одно письмо. trigger пока зарезервирован и нигде не используется.
 struct Message {
     int id = 0;
@@ -33,6 +35,9 @@ public:
 
     // Помечает письмо прочитанным по индексу. false, если индекс вне диапазона.
     bool markRead(std::size_t index);
+
+    // Открывает письмо, помечает прочитанным и отправляет игровой сигнал.
+    bool open(std::size_t index, Session& session);
 
     // Количество непрочитанных писем.
     int unreadCount() const;

@@ -1,0 +1,22 @@
+{
+  "ip": "203.0.113.77",
+  "name": "agent-pc",
+  "alive": true,
+  "ports": {
+    "23": { "service": "telnet", "banner": "Field terminal" }
+  },
+  "accounts": [["field", "blindspot"]],
+  "start_dir": "/home/field",
+  "reach": 0,
+  "commands": ["ls", "cat", "cd", "pwd"],
+  "fs": {
+    "etc": {
+      "motd": "Field terminal. Local mailbox sync enabled."
+    },
+    "home": {
+      "field": {
+        "notes.txt": "Синхронизация с JSC Files включена. Если меня найдут, доступ будет отозван."
+      }
+    }
+  }
+}
