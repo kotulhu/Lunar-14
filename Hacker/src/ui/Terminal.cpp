@@ -6,6 +6,8 @@
 #include <thread>
 
 #ifdef _WIN32
+#include <conio.h>
+#include <io.h>
 #include <windows.h>
 #else
 #include <termios.h>
@@ -22,7 +24,21 @@ Terminal::Terminal() {
     }
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
+    is_tty_ = _isatty(_fileno(stdout)) && _isatty(_fileno(stdin));
+#else
+    is_tty_ = isatty(STDOUT_FILENO) == 1 && isatty(STDIN_FILENO) == 1;
 #endif
+
+    if (is_tty_) {
+        // Кислотно-зелёные символы на чёрном фоне.
+        std::cout << "\033[92;40m" << std::flush;
+    }
+}
+
+Terminal::~Terminal() {
+    if (is_tty_) {
+        std::cout << "\033[0m" << std::flush;
+    }
 }
 
 void Terminal::print(const std::string& line) {
@@ -45,6 +61,32 @@ bool Terminal::readLine(const std::string& prompt, std::string& out) {
 void Terminal::pause(int milliseconds) {
     if (no_delay_) return;
     std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
+}
+
+void Terminal::clearScreen() {
+    if (!is_tty_) return;
+    std::cout << "\033[2J\033[H" << std::flush;
+}
+
+void Terminal::waitForKey() {
+    if (!is_tty_) return;
+
+#ifdef _WIN32
+    _getch();
+#else
+    termios old_term{};
+    if (tcgetattr(STDIN_FILENO, &old_term) == 0) {
+        termios new_term = old_term;
+        new_term.c_lflag &= ~(ICANON | ECHO);
+        new_term.c_cc[VMIN] = 1;
+        new_term.c_cc[VTIME] = 0;
+        if (tcsetattr(STDIN_FILENO, TCSANOW, &new_term) == 0) {
+            char c = 0;
+            (void)read(STDIN_FILENO, &c, 1);
+            tcsetattr(STDIN_FILENO, TCSANOW, &old_term);
+        }
+    }
+#endif
 }
 
 std::string Terminal::localTimeHM() const {

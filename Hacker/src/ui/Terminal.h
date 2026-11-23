@@ -6,6 +6,7 @@
 class Terminal {
 public:
     Terminal();
+    ~Terminal();
 
     void print(const std::string& line);        // строка + перевод строки
     void printInline(const std::string& text);  // без перевода строки
@@ -22,9 +23,16 @@ public:
     // Отключает паузы (ключ --no-delay).
     void setNoDelay(bool value) { no_delay_ = value; }
 
+    // Очищает экран (только в интерактивном терминале).
+    void clearScreen();
+
+    // Ждёт нажатия любой клавиши (в неинтерактивном режиме возвращает сразу).
+    void waitForKey();
+
     // Текущее локальное время в формате "HH:MM" (формируется только здесь).
     std::string localTimeHM() const;
 
 private:
     bool no_delay_ = false;
+    bool is_tty_ = false;
 };

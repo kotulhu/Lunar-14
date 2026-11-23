@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "commands/AboutCommand.h"
+#include <nlohmann/json.hpp>
 #include "commands/BroadcastCommand.h"
 #include "commands/CatCommand.h"
 #include "commands/CdCommand.h"
@@ -194,6 +195,91 @@ static void printBootBanner(Terminal& term, const Registry& registry,
     term.print("Type 'help' for a list of commands.");
 }
 
+using json = nlohmann::json;
+
+// Стартовый экран: заставка и вступительный текст (data/intro.json).
+struct IntroConfig {
+    std::string title = "Hacker 1990";
+    std::vector<std::string> art;
+    std::vector<std::string> intro;
+    std::string prompt = "Press any key to start...";
+};
+
+static const std::vector<std::string>& defaultIntroArt() {
+    static const std::vector<std::string> art = {
+        " _   _    _    ____ _  ___   _    ____  ",
+        "| | | |  / \\  / ___| |/ / | | |  |  _ \\ ",
+        "| |_| | / _ \\| |   | ' /| |_| |  | |_) |",
+        "|  _  |/ ___ \\ |___| . \\|  _  |  |  _ < ",
+        "|_| |_/_/   \\_\\____|_|\\_\\_| |_|  |_| \\_\\"
+    };
+    return art;
+}
+
+static bool loadIntroConfig(const std::string& path, IntroConfig& cfg, std::string& error) {
+    std::ifstream in(path);
+    if (!in) {
+        // Файл не обязателен: используем значения по умолчанию.
+        return true;
+    }
+
+    json root;
+    try {
+        in >> root;
+    } catch (const std::exception& e) {
+        error = "intro.json: invalid JSON: " + std::string(e.what());
+        return false;
+    }
+    if (!root.is_object()) {
+        error = "intro.json: expected an object";
+        return false;
+    }
+
+    if (root.contains("title")) {
+        if (!root["title"].is_string()) {
+            error = "intro.json: 'title' must be a string";
+            return false;
+        }
+        cfg.title = root["title"].get<std::string>();
+    }
+    if (root.contains("art")) {
+        if (!root["art"].is_array()) {
+            error = "intro.json: 'art' must be an array";
+            return false;
+        }
+        cfg.art.clear();
+        for (const json& line : root["art"]) {
+            if (!line.is_string()) {
+                error = "intro.json: every art line must be a string";
+                return false;
+            }
+            cfg.art.push_back(line.get<std::string>());
+        }
+    }
+    if (root.contains("intro")) {
+        if (!root["intro"].is_array()) {
+            error = "intro.json: 'intro' must be an array";
+            return false;
+        }
+        cfg.intro.clear();
+        for (const json& line : root["intro"]) {
+            if (!line.is_string()) {
+                error = "intro.json: every intro line must be a string";
+                return false;
+            }
+            cfg.intro.push_back(line.get<std::string>());
+        }
+    }
+    if (root.contains("prompt")) {
+        if (!root["prompt"].is_string()) {
+            error = "intro.json: 'prompt' must be a string";
+            return false;
+        }
+        cfg.prompt = root["prompt"].get<std::string>();
+    }
+    return true;
+}
+
 int main(int argc, char** argv) {
     // Необязательные аргументы: --start-host <ip|имя>, --unlock-contacts,
     // --data-dir <путь>, --save-dir <путь>, --new, --no-save, --no-delay.
@@ -302,6 +388,13 @@ int main(int argc, char** argv) {
     }
     session->setQuest(std::move(quest));
 
+    // Стартовый экран: заставка и вступительный текст (data/intro.json).
+    IntroConfig intro_cfg;
+    if (!loadIntroConfig(dataPath(data_dir, "intro.json"), intro_cfg, error)) {
+        std::cerr << "Failed to load intro: " << error << "\n";
+        return 1;
+    }
+
     // Папка и файл сохранения. --no-save полностью отключает работу с ним.
     bool saving_enabled = !no_save;
     std::string save_path;
@@ -340,6 +433,20 @@ int main(int argc, char** argv) {
     registry.add(std::make_unique<DownloadsCommand>());
     registry.add(std::make_unique<RunCommand>());
     registry.add(std::make_unique<ExitCommand>());
+
+    // Стартовый экран: приветствие, ASCII-заставка и ожидание клавиши.
+    term.clearScreen();
+    const std::vector<std::string>& art =
+        intro_cfg.art.empty() ? defaultIntroArt() : intro_cfg.art;
+    for (const std::string& line : art) term.print(line);
+    term.print("");
+    term.print(intro_cfg.title);
+    term.print("");
+    for (const std::string& line : intro_cfg.intro) term.print(line);
+    term.print("");
+    term.print(intro_cfg.prompt);
+    term.waitForKey();
+    term.clearScreen();
 
     printBootSequence(term, *session);
     printBootBanner(term, registry, *session);
